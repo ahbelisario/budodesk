@@ -34,7 +34,7 @@ export default function Dashboard({ onAuthExpired }) {
   const MONTHS_SHORT = [
     t("months_short.jan"), t("months_short.feb"), t("months_short.mar"),
     t("months_short.apr"), t("months_short.may"), t("months_short.jun"),
-    t("months_short.jul"), t("months_short.ago"), t("months_short.sep"),
+    t("months_short.jul"), t("months_short.aug"), t("months_short.sep"),
     t("months_short.oct"), t("months_short.nov"), t("months_short.dec")
   ];
 

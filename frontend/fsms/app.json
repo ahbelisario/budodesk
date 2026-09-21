@@ -21,7 +21,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
-     "web": {
+    "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png",
       "viewport": {
@@ -50,7 +50,8 @@
       "expo-secure-store",
       "@react-native-community/datetimepicker",
       "expo-localization",
-      "expo-font"
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
