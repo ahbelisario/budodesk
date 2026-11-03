@@ -1,4 +1,4 @@
-FROM mysql:latest
+FROM docker.io/library/mysql:latest
 
 ENV MYSQL_ROOT_PASSWORD=Fsms123#$
 ENV MYSQL_DATABASE=fsms
