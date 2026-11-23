@@ -12,8 +12,8 @@ RUN npm config set cafile /etc/ssl/certs/ca-certificates.crt
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-COPY src ./src
-COPY scripts ./scripts
+COPY --chown=node:node src ./src
+COPY --chown=node:node scripts ./scripts
 
 # Carpeta de archivos subidos (montada como volumen) y usuario sin privilegios
 RUN mkdir -p uploads && chown -R node:node uploads
