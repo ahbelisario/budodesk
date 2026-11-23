@@ -115,8 +115,8 @@ export default function LoginScreen({ onLoginSuccess }) {
       }}>
       
         {/* Card de login */}
-        <View style={appStyles.card}>
-
+        <View>
+        
           {/* Logo del dojo */}
           {dojoLogo && (
             <View style={{ alignItems: 'center', marginBottom: 30 }}>

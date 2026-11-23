@@ -10,7 +10,7 @@ const scale = isMobile ? 0.9 : 1; // Factor de escala para móvil
 export const appStyles = StyleSheet.create({
   page: { 
     flex: 1, 
-    backgroundColor: "rgba(0, 0, 0, 0.00)", 
+    backgroundColor: "rgb(255, 255, 255)", 
     alignItems: "center", 
     justifyContent: "center",
   },
@@ -18,7 +18,7 @@ export const appStyles = StyleSheet.create({
     width: "100%", 
     maxWidth: 350 * scale, 
     backgroundColor: "white", 
-    borderRadius: 14, 
+    borderRadius: 2, 
     padding: 24 * scale, 
     borderWidth: 1, 
     borderColor: "#cbd5e1" 
@@ -42,7 +42,7 @@ export const appStyles = StyleSheet.create({
     width: "100%", 
     paddingVertical: 10 * scale, 
     paddingHorizontal: 12 * scale, 
-    borderRadius: 10, 
+    borderRadius: 2, 
     borderWidth: 1, 
     borderColor: "#cbd5e1", 
     marginBottom: 14 * scale,
@@ -59,7 +59,7 @@ export const appStyles = StyleSheet.create({
   toggleBtn: { 
     paddingVertical: 10 * scale, 
     paddingHorizontal: 12 * scale, 
-    borderRadius: 10, 
+    borderRadius: 2, 
     borderWidth: 1, 
     borderColor: "#cbd5e1", 
     backgroundColor: "#f8fafc",
@@ -70,7 +70,7 @@ export const appStyles = StyleSheet.create({
 
   submitBtn: { 
     paddingVertical: 12 * scale, 
-    borderRadius: 10, 
+    borderRadius: 2, 
     backgroundColor: "#5ea4c5ff", 
     alignItems: "center", 
     justifyContent: "center",
@@ -121,7 +121,7 @@ export const ScreenStyles = StyleSheet.create({
     borderColor: "#fecaca", 
     borderWidth: 1, 
     padding: 10 * scale, 
-    borderRadius: 10, 
+    borderRadius: 2, 
     marginBottom: 10 * scale 
   },
   alertErrorText: { 
@@ -133,7 +133,7 @@ export const ScreenStyles = StyleSheet.create({
     borderColor: "#bbf7d0", 
     borderWidth: 1, 
     padding: 10 * scale, 
-    borderRadius: 10, 
+    borderRadius: 2, 
     marginBottom: 10 * scale 
   },
   alertOkText: { 
@@ -145,7 +145,7 @@ export const ScreenStyles = StyleSheet.create({
     backgroundColor: "#5ea4c5ff", 
     paddingVertical: 10 * scale, 
     paddingHorizontal: 14 * scale, 
-    borderRadius: 10, 
+    borderRadius: 2, 
     marginBottom: 12 * scale
   },
   btnPrimaryText: { 
@@ -160,7 +160,7 @@ export const ScreenStyles = StyleSheet.create({
     borderColor: "#334155", 
     paddingVertical: 10 * scale, 
     paddingHorizontal: 14 * scale, 
-    borderRadius: 10, 
+    borderRadius: 2, 
     marginBottom: 12 * scale 
   },
   btnSecondaryText: { 
@@ -183,7 +183,7 @@ export const ScreenStyles = StyleSheet.create({
     alignItems: "center", 
     gap: 10 * scale, 
     backgroundColor: "white", 
-    borderRadius: 12, 
+    borderRadius: 2, 
     padding: 12 * scale, 
     marginBottom: 10 * scale 
   },
@@ -195,7 +195,7 @@ export const ScreenStyles = StyleSheet.create({
     alignItems: "center", 
     gap: 10 * scale, 
     backgroundColor: "white", 
-    borderRadius: 12, 
+    borderRadius: 2, 
     padding: 12 * scale, 
     marginBottom: 10 * scale 
   },
@@ -213,7 +213,7 @@ export const ScreenStyles = StyleSheet.create({
     borderWidth: 1, 
     textAlignVertical: "top", 
     borderColor: "#cbd5e1", 
-    borderRadius: 10, 
+    borderRadius: 2, 
     paddingHorizontal: 12 * scale, 
     paddingVertical: 12 * scale, 
     minHeight: 100 * scale,
@@ -225,7 +225,7 @@ export const ScreenStyles = StyleSheet.create({
     backgroundColor: "#262c39ff", 
     paddingVertical: 8 * scale, 
     paddingHorizontal: 10 * scale, 
-    borderRadius: 10 
+    borderRadius: 2 
   },
   dangerBtn: { 
     backgroundColor: "#7f1d1d" 
@@ -244,7 +244,7 @@ export const ScreenStyles = StyleSheet.create({
   },
   modalCard: { 
     backgroundColor: "white", 
-    borderRadius: 14, 
+    borderRadius: 2, 
     padding: 16 * scale,
     maxWidth: '100%',
   },
@@ -264,7 +264,7 @@ export const ScreenStyles = StyleSheet.create({
     backgroundColor: "#ffffff", 
     borderWidth: 1, 
     borderColor: "#cbd5e1", 
-    borderRadius: 10, 
+    borderRadius: 2, 
     paddingHorizontal: 12 * scale, 
     paddingVertical: 10 * scale,
     fontSize: 13,
@@ -274,7 +274,7 @@ export const ScreenStyles = StyleSheet.create({
   pickerWrapper: { 
     borderWidth: 1, 
     borderColor: "#cbd5e1", 
-    borderRadius: 10, 
+    borderRadius: 2, 
     overflow: "hidden", 
     backgroundColor: "white", 
     paddingHorizontal: 12 * scale, 
@@ -287,7 +287,7 @@ export const ScreenStyles = StyleSheet.create({
     backgroundColor: "#38435cff", 
     paddingVertical: 8 * scale, 
     paddingHorizontal: 12 * scale, 
-    borderRadius: 10, 
+    borderRadius: 2, 
     marginTop: 10 * scale, 
     marginBottom: 8 * scale,
   },
@@ -304,7 +304,7 @@ export const ScreenStyles = StyleSheet.create({
     backgroundColor: "#3f4a61",
     paddingVertical: 10 * scale,
     paddingHorizontal: 12 * scale,
-    borderRadius: 10,
+    borderRadius: 2,
     marginTop: 10 * scale,
     marginBottom: 8 * scale,
   },
@@ -326,7 +326,7 @@ export const ScreenStyles = StyleSheet.create({
     backgroundColor: "#69799d",
     paddingVertical: 10 * scale,
     paddingHorizontal: 12 * scale,
-    borderRadius: 10,
+    borderRadius: 2,
     marginTop: 10 * scale,
     marginBottom: 8 * scale,
   },
@@ -371,7 +371,7 @@ export const DashboardStyles = StyleSheet.create({
   },
   chartContainer: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -381,7 +381,7 @@ export const DashboardStyles = StyleSheet.create({
   },
   packageCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     marginBottom: 12 * scale,
     shadowColor: '#000',
@@ -418,7 +418,7 @@ export const DashboardStyles = StyleSheet.create({
   },
   classCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     marginBottom: 12 * scale,
     borderLeftWidth: 4,
@@ -455,7 +455,7 @@ export const DashboardStyles = StyleSheet.create({
   },
   alertCard: {
     backgroundColor: '#fef3c7',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     marginBottom: 12 * scale,
     borderLeftWidth: 4,
@@ -522,7 +522,7 @@ export const HomeStyles = StyleSheet.create({
   },
   membershipCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     marginBottom: 12 * scale,
     shadowColor: '#000',
@@ -553,7 +553,7 @@ export const HomeStyles = StyleSheet.create({
   },
   noMembershipCard: {
     backgroundColor: '#f1f5f9',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 20 * scale,
     alignItems: 'center',
   },
@@ -564,7 +564,7 @@ export const HomeStyles = StyleSheet.create({
   },
   warningCard: {
     backgroundColor: '#fef3c7',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     borderLeftWidth: 4,
     borderLeftColor: '#f59e0b',
@@ -581,7 +581,7 @@ export const HomeStyles = StyleSheet.create({
   },
   attendanceCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -636,7 +636,7 @@ export const HomeStyles = StyleSheet.create({
   },
   myClassCard: {
     backgroundColor: '#f0fdf4',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     marginBottom: 12 * scale,
     borderLeftWidth: 4,
@@ -661,7 +661,7 @@ export const HomeStyles = StyleSheet.create({
   },
   enrolledBadge: {
     backgroundColor: '#10b981',
-    borderRadius: 12,
+    borderRadius: 2,
     paddingHorizontal: 12 * scale,
     paddingVertical: 6 * scale,
   },
@@ -679,7 +679,7 @@ export const HomeStyles = StyleSheet.create({
   },
   classCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     marginBottom: 12 * scale,
     borderLeftWidth: 4,
@@ -716,7 +716,7 @@ export const HomeStyles = StyleSheet.create({
   },
   profileCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -778,7 +778,7 @@ export const AttendanceStyles = StyleSheet.create({
   },
   classInfoCard: {
     backgroundColor: '#dbeafe',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     marginBottom: 24 * scale,
     borderLeftWidth: 4,
@@ -832,7 +832,7 @@ export const AttendanceStyles = StyleSheet.create({
   },
   studentCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     marginBottom: 12 * scale,
     flexDirection: 'row',
@@ -877,19 +877,19 @@ export const AttendanceStyles = StyleSheet.create({
   },
   presentBadge: {
     backgroundColor: '#10b981',
-    borderRadius: 12,
+    borderRadius: 2,
     paddingHorizontal: 12 * scale,
     paddingVertical: 6 * scale,
   },
   absentBadge: {
     backgroundColor: '#ef4444',
-    borderRadius: 12,
+    borderRadius: 2,
     paddingHorizontal: 12 * scale,
     paddingVertical: 6 * scale,
   },
   pendingBadge: {
     backgroundColor: '#94a3b8',
-    borderRadius: 12,
+    borderRadius: 2,
     paddingHorizontal: 12 * scale,
     paddingVertical: 6 * scale,
   },
@@ -934,7 +934,7 @@ export const AvailableClassesStyles = StyleSheet.create({
   },
   classCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     marginBottom: 12 * scale,
     borderLeftWidth: 4,
@@ -973,7 +973,7 @@ export const AvailableClassesStyles = StyleSheet.create({
   },
   enrolledBadge: {
     backgroundColor: '#10b981',
-    borderRadius: 12,
+    borderRadius: 2,
     paddingHorizontal: 12 * scale,
     paddingVertical: 6 * scale,
   },
@@ -984,7 +984,7 @@ export const AvailableClassesStyles = StyleSheet.create({
   },
   fullBadge: {
     backgroundColor: '#94a3b8',
-    borderRadius: 12,
+    borderRadius: 2,
     paddingHorizontal: 12 * scale,
     paddingVertical: 6 * scale,
   },
@@ -1051,7 +1051,7 @@ export const ManageEnrollmentsStyles = StyleSheet.create({
   },
   classInfoCard: {
     backgroundColor: '#dbeafe',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     marginBottom: 24 * scale,
     borderLeftWidth: 4,
@@ -1079,7 +1079,7 @@ export const ManageEnrollmentsStyles = StyleSheet.create({
   },
   enrollmentCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 2,
     padding: 16 * scale,
     marginBottom: 12 * scale,
     borderLeftWidth: 4,
@@ -1112,7 +1112,7 @@ export const ManageEnrollmentsStyles = StyleSheet.create({
     color: '#94a3b8',
   },
   statusBadge: {
-    borderRadius: 12,
+    borderRadius: 2,
     paddingHorizontal: 12 * scale,
     paddingVertical: 6 * scale,
   },
@@ -1226,14 +1226,14 @@ export const ScheduleStyles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#f8fafc',
     padding: 2 * scale,
-    borderRadius: 8,
+    borderRadius: 2,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
   weekHeader: {
     flexDirection: 'row',
     backgroundColor: '#e2e8f0',
-    borderRadius: 8,
+    borderRadius: 2,
     padding: 8 * scale,
     marginBottom: 8 * scale
   },
@@ -1245,7 +1245,7 @@ export const ScheduleStyles = StyleSheet.create({
   dayInner: {
     flex: 1,
     backgroundColor: '#ffffff',
-    borderRadius: 8,
+    borderRadius: 2,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     padding: 4 * scale,
@@ -1277,7 +1277,7 @@ export const ScheduleStyles = StyleSheet.create({
   selectedDateDetails: {
     marginTop: 16 * scale,
     backgroundColor: '#f8fafc',
-    borderRadius: 8,
+    borderRadius: 2,
     padding: 16 * scale
   },
   selectedDateHeader: {
@@ -1293,7 +1293,7 @@ export const ScheduleStyles = StyleSheet.create({
   },
   classCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 8,
+    borderRadius: 2,
     padding: 12 * scale,
     marginBottom: 8 * scale,
     borderLeftWidth: 4,
@@ -1314,7 +1314,7 @@ export const ScheduleStyles = StyleSheet.create({
   },
   recurringBadge: {
     backgroundColor: '#dbeafe',
-    borderRadius: 12,
+    borderRadius: 2,
     paddingHorizontal: 8 * scale,
     paddingVertical: 4 * scale,
   },
@@ -1362,7 +1362,7 @@ export const ScheduleStyles = StyleSheet.create({
   recurringSection: {
     backgroundColor: '#f8fafc',
     padding: 16 * scale,
-    borderRadius: 12,
+    borderRadius: 2,
     marginBottom: 16 * scale,
     borderWidth: 1,
     borderColor: '#e2e8f0',

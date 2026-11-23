@@ -35,7 +35,7 @@ export function ScoreCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "white",
-    borderRadius: 14,
+    borderRadius: 2,
     padding: 14,
     borderWidth: 1,
     borderColor: "#e5e7eb",

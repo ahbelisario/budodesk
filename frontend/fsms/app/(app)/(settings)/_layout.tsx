@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginHorizontal: 8,
     marginVertical: 2,
-    borderRadius: 8,
+    borderRadius: 2,
     backgroundColor: 'transparent',
     cursor: 'pointer',
   },
