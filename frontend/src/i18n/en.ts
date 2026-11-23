@@ -1,4 +1,5 @@
 import type { es } from './es';
+import { membersEn } from './members';
 
 type Shape<T> = { [K in keyof T]: T[K] extends string ? string : Shape<T[K]> };
 
@@ -170,6 +171,7 @@ export const en: Shape<typeof es> = {
     status_active: 'Active', status_past_due: 'Past due', status_paused: 'Paused', status_pending: 'Starting soon',
     status_cancelled: 'Cancelled', status_expired: 'Expired',
   },
+  members: membersEn,
   roles: {
     owner: 'Owner', admin: 'Admin', instructor: 'Instructor', staff: 'Staff', student: 'Student', guardian: 'Guardian',
   },

@@ -178,4 +178,32 @@ me.get('/sessions', async (req, res) => {
 // Menores a cargo (para que el tutor cambie de perfil en la app)
 me.get('/minors', requireDojo, async (req, res) => ok(res, await myMinors(req)));
 
+// El tutor consulta y edita los datos personales de sus menores (ellos no tienen cuenta propia)
+async function assertGuardian(guardianId, minorId) {
+  const g = await one(pool, 'SELECT 1 AS ok FROM user_guardians WHERE guardian_user_id = :g AND minor_user_id = :m', { g: guardianId, m: minorId });
+  if (!g) {
+    const { forbidden } = require('../../utils/errors');
+    throw forbidden('Solo el tutor puede ver o editar los datos de esta persona');
+  }
+}
+
+me.get('/minors/:userId/profile', validate({ params: z.object({ userId: z.coerce.number().int().positive() }) }), async (req, res) => {
+  await assertGuardian(req.auth.userId, req.valid.params.userId);
+  ok(res, await myProfile(req.valid.params.userId));
+});
+
+me.patch('/minors/:userId/profile', validate({
+  params: z.object({ userId: z.coerce.number().int().positive() }),
+  body: z.object(Object.fromEntries(Object.entries(PROFILE_FIELDS).map(([k, v]) => [k, v.optional()])))
+    .refine((o) => Object.keys(o).length > 0, 'Nada que actualizar'),
+}), async (req, res) => {
+  const minorId = req.valid.params.userId;
+  await assertGuardian(req.auth.userId, minorId);
+  const set = buildSet(req.valid.body, Object.fromEntries(Object.keys(PROFILE_FIELDS).map((k) => [k, k])));
+  await pool.query(`UPDATE user_profiles SET ${set.sql} WHERE user_id = :u`, { ...set.params, u: minorId });
+  const { audit } = require('../../utils/audit');
+  await audit(pool, { userId: req.auth.userId, action: 'guardian_update', entity: 'member', entityId: minorId, after: req.valid.body, ip: req.ip });
+  ok(res, await myProfile(minorId));
+});
+
 module.exports = { account, me };

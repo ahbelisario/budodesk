@@ -100,7 +100,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Session>(() => {
     const roles = dojo?.roles ?? [];
-    const hasRole = (...r: Role[]) => roles.some((x) => r.includes(x));
+    // owner implica admin (igual que en el servidor)
+    const hasRole = (...r: Role[]) => roles.some((x) => r.includes(x) || (x === 'owner' && r.includes('admin')));
     return {
       status, user, dojo, dojos, roles, minors,
       actingUserId: actingUserId ?? user?.id ?? null,

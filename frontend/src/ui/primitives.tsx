@@ -182,7 +182,7 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field({ label, e
     <View style={{ gap: 6 }}>
       <Text variant="smallStrong" nativeID={`${label}-label`}>{label}</Text>
       <View style={{
-        flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: radius.md, backgroundColor: palette.surface,
+        flexDirection: 'row', alignItems: rest.multiline ? 'stretch' : 'center', height: rest.multiline ? undefined : 48, minHeight: 48, borderRadius: radius.md, backgroundColor: palette.surface,
         borderWidth: focused ? 2 : 1, borderColor: error ? palette.danger : focused ? accent : palette.line, paddingHorizontal: focused ? 13 : 14,
       }}>
         <TextInput
@@ -194,7 +194,7 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field({ label, e
           onFocus={(e) => { setFocused(true); rest.onFocus?.(e); }}
           onBlur={(e) => { setFocused(false); rest.onBlur?.(e); }}
           {...rest}
-          style={[{ flex: 1, height: '100%', fontFamily: fonts.body, fontSize: 16, color: palette.ink, outlineWidth: 0 } as TextStyle, style]}
+          style={[{ flex: 1, height: rest.multiline ? undefined : '100%', fontFamily: fonts.body, fontSize: 16, color: palette.ink, outlineWidth: 0 } as TextStyle, style]}
         />
         {secureToggle ? (
           <Pressable accessibilityRole="button" accessibilityLabel={hidden ? 'Mostrar contraseña' : 'Ocultar contraseña'}

@@ -244,6 +244,11 @@ describe('membresías y facturación', () => {
     assert.ok(st.summary.overdue >= 1200);
     const minors = ok(await api('get', '/me/minors', T.mama));
     assert.equal(minors[0].user_id, ids.nino);
+    // El tutor edita los datos de su hijo; un tercero no
+    const prof = ok(await api('patch', `/me/minors/${ids.nino}/profile`, T.mama, { blood_type: 'A+', emergency_contact_name: 'Abuela' }));
+    assert.equal(prof.blood_type, 'A+');
+    assert.equal((await api('patch', `/me/minors/${ids.nino}/profile`, T.student, { blood_type: 'B+' })).status, 403);
+    assert.equal((await api('get', `/me/minors/${ids.nino}/profile`, T.student)).status, 403);
     const msNino = ok(await api('get', `/memberships/mine?user_id=${ids.nino}`, T.mama));
     assert.equal(msNino[0].id, ids.msFam);
     // Pero no puede ver datos de otro alumno

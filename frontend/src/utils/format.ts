@@ -44,3 +44,12 @@ export function greeting(now = new Date()) {
 
 /** Primera letra en mayúscula (solo la primera, no cada palabra) */
 export const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
+/** Marca de tiempo ISO (UTC) → "16 nov" en la hora local del dispositivo */
+export function dayShortTs(iso: string) {
+  return new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short' }).format(new Date(iso));
+}
+/** Marca de tiempo ISO → "16 nov, 18:40" */
+export function dateTimeShort(iso: string) {
+  return new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+}
