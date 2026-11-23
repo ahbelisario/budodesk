@@ -41,3 +41,6 @@ export function greeting(now = new Date()) {
   if (h < 19) return es ? 'Buenas tardes' : 'Good afternoon';
   return es ? 'Buenas noches' : 'Good evening';
 }
+
+/** Primera letra en mayúscula (solo la primera, no cada palabra) */
+export const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);

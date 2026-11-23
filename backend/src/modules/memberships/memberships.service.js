@@ -30,7 +30,9 @@ function periodLabel(planName, start, end, lang = 'es') {
   const [y, m] = start.split('-').map(Number);
   const months = MONTHS[lang] || MONTHS.es;
   if (end && end.slice(0, 7) !== start.slice(0, 7) && Number(end.slice(8)) < 28) {
-    return `${planName} · ${start} – ${end}`;
+    // Periodo que cruza meses: "Familiar · 16 nov – 15 dic"
+    const short = (d) => `${Number(d.slice(8))} ${months[Number(d.slice(5, 7)) - 1].slice(0, 3).toLowerCase()}`;
+    return `${planName} · ${short(start)} – ${short(end)}`;
   }
   return `${planName} · ${months[m - 1]} ${y}`;
 }

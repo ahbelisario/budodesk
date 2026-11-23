@@ -1,7 +1,10 @@
 import React from 'react';
-import { ComingSoon } from '@/ui/ComingSoon';
-import { t } from '@/i18n';
+import { useSession } from '@/session/SessionProvider';
+import { AdminHome } from '@/screens/AdminHome';
+import { StudentHome } from '@/screens/StudentHome';
 
-export default function Screen() {
-  return <ComingSoon title={t('nav.home')} icon="home" />;
+/** Staff (owner, admin, staff, instructor) → tablero; alumnos y tutores → su inicio */
+export default function Home() {
+  const { isStaff } = useSession();
+  return isStaff ? <AdminHome /> : <StudentHome />;
 }

@@ -20,6 +20,8 @@ Requisitos: Docker Desktop y Node 20.
 # 1. Base de datos + API
 docker compose -f compose-dev.yaml up -d --build
 docker compose -f compose-dev.yaml exec backend npm run create-admin -- --email tu@correo.mx --name Tu --dojo seikoukan
+# (opcional) datos de ejemplo: alumnos, tutor con hijos, clases, pagos, examen
+docker compose -f compose-dev.yaml exec backend node scripts/demo-data.js --dojo seikoukan --admin tu@correo.mx
 
 # 2. App
 cd frontend
