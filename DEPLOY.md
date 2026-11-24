@@ -3,56 +3,90 @@
 Los dos ambientes usan **el mismo `compose-prd.yaml`**; lo que cambia es el
 `.env` de cada servidor (dominio, puerto, secretos, nombre del proyecto).
 
-## Primer despliegue en un servidor
+## Despliegue con `deploy.sh` (recomendado)
 
-> ⚠️ La versión 2 usa una base de datos **nueva** (`budodesk`) en un volumen de
-> Docker. Los contenedores de la versión anterior (base `fsms`, sin volumen) se
-> reemplazan y sus datos de prueba no se migran.
+Funciona con **Docker** (con el plugin `docker compose`) o con **Podman** (con
+`podman-compose`). En el servidor:
 
 ```bash
-cd /ruta/al/repo
-git fetch && git checkout v2 && git pull     # o main, una vez que se haga merge
-
-# 1. Configuración del servidor (una sola vez)
-cp .env.example .env
-nano .env        # llena DB_ROOT_PASSWORD, DB_PASSWORD, JWT_ACCESS_SECRET, SMTP_PASS, APP_BASE_URL…
-                 # secretos:  openssl rand -base64 36
-
-# 2. Apagar la versión anterior (si sigue corriendo en este servidor)
-docker compose -f compose-prd.yaml down      # SIN -v
-
-# 3. Levantar la nueva
-docker compose -f compose-prd.yaml up -d --build
-docker compose -f compose-prd.yaml ps        # db "healthy", backend "healthy"
-
-# 4. Crear tu usuario (dueño del dojo y superadmin). Pide la contraseña sin mostrarla.
-docker compose -f compose-prd.yaml exec backend node scripts/create-admin.js \
-  --email tu@correo.mx --name Arturo --dojo seikoukan --superadmin
+git clone https://github.com/ahbelisario/fsms.git budodesk && cd budodesk
+git checkout main            # o v2 mientras no se haga merge
+./deploy.sh
 ```
 
-Abre `https://seikoukan.budodesk.com` y entra con ese correo.
+La primera vez pregunta lo necesario y crea el `.env`:
+
+- ambiente (`dev` o `prd`), con valores por omisión distintos para cada uno;
+- Docker o Podman, si el servidor tiene los dos;
+- URL pública, puerto, dojo por omisión y cuántos proxies hay delante;
+- correo SMTP y su contraseña (no se muestra al escribirla).
+
+Las contraseñas de la base y el secreto JWT **se generan solas**. Después
+levanta los contenedores, espera a que el API responda, ofrece crear tu usuario
+administrador y, solo en dev, cargar datos de ejemplo.
+
+Las siguientes veces `./deploy.sh` muestra el resumen y pregunta si quieres
+cambiar algo antes de desplegar. Al cambiar la configuración se conservan las
+contraseñas existentes y se guarda una copia `.env.bak-FECHA`.
+
+| Comando | Qué hace |
+|---|---|
+| `./deploy.sh` | Configura (si hace falta) y despliega |
+| `./deploy.sh up` | Actualiza sin preguntas (después de `git pull`) |
+| `./deploy.sh config` | Solo crea o cambia el `.env` |
+| `./deploy.sh admin` | Crea o actualiza un usuario administrador |
+| `./deploy.sh demo` | Datos de ejemplo (solo `APP_ENV=dev`) |
+| `./deploy.sh status` | Contenedores y salud del API |
+| `./deploy.sh logs [backend\|db\|gateway\|frontend]` | Logs en vivo |
+| `./deploy.sh stop` | Apaga los contenedores (los datos se conservan) |
+
+Opciones: `--engine docker|podman` para forzar el motor y `--yes` para aceptar
+los valores por omisión sin preguntar.
+
+> ⚠️ La versión 2 usa una base de datos **nueva** (`budodesk`) en un volumen.
+> Si en el servidor sigue corriendo la versión anterior, apágala primero desde
+> su carpeta con `docker compose -f compose-prd.yaml down` (**sin** `-v`). Sus
+> datos de prueba no se migran.
 
 ### Dev y producción en el mismo servidor
 
-Dos copias del repo (o dos carpetas), cada una con su `.env`:
+Usa dos carpetas (dos clones del repo) y corre `./deploy.sh` en cada una. Los
+valores por omisión ya los separan:
 
-| Variable | dev | prod |
+| | dev | prd |
 |---|---|---|
-| `COMPOSE_PROJECT_NAME` | `budodesk-dev` | `budodesk` |
-| `HTTP_PORT` | `8801` | `8800` |
-| `APP_BASE_URL` | `https://dev.budodesk.com` | `https://seikoukan.budodesk.com` |
-| `DEFAULT_DOJO_SLUG` | `seikoukan` | `seikoukan` |
+| Proyecto (volúmenes) | `budodesk-dev` | `budodesk` |
+| Puerto | `8801` | `8800` |
+| URL | `https://dev.budodesk.com` | `https://seikoukan.budodesk.com` |
+| Correos reales | no (van al log) | sí |
 
-Con nombres de proyecto distintos, cada ambiente tiene sus propios volúmenes
-(base de datos y archivos) y no se pisan. Tu proxy de entrada (Cloudflare /
-Nginx Proxy Manager) apunta cada dominio a su puerto. `*.budodesk.com` puede
-apuntar a producción: cada subdominio es un dojo.
+Tu proxy de entrada (Cloudflare / Nginx Proxy Manager) apunta cada dominio a su
+puerto. `*.budodesk.com` puede apuntar a producción: cada subdominio es un dojo.
+
+### Podman
+
+- Imágenes con nombre completo (`docker.io/library/...`), así que no hace falta
+  configurar registros.
+- El script compila en formato docker (`BUILDAH_FORMAT=docker`) para conservar
+  los *healthchecks*.
+- Sin root, para que los contenedores vuelvan a levantar después de reiniciar
+  el servidor:
+  `systemctl --user enable --now podman-restart.service && loginctl enable-linger "$USER"`
+
+## Despliegue manual (sin el script)
+
+```bash
+cp .env.example .env && nano .env     # llena las contraseñas y el SMTP
+docker compose -f compose-prd.yaml up -d --build
+docker compose -f compose-prd.yaml exec backend node scripts/create-admin.js \
+  --email tu@correo.mx --name Arturo --dojo seikoukan --superadmin
+```
 
 ## Actualizar
 
 ```bash
 git pull
-docker compose -f compose-prd.yaml up -d --build
+./deploy.sh up
 ```
 
 Los datos no se tocan: el esquema solo se carga cuando el volumen está vacío.

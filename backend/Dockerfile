@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM docker.io/library/node:20-alpine
 WORKDIR /usr/src/app
 
 # Certificado del proxy corporativo (Zscaler) para poder instalar paquetes desde esa red.

@@ -48,7 +48,7 @@ services:
       TZ: UTC
     volumes:
       - dbdata:/var/lib/mysql
-      - ./backups:/backups
+      - ./backups:/backups:z       # :z = permiso SELinux (Fedora/RHEL); en otros sistemas no hace nada
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 10s

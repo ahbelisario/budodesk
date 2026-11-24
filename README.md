@@ -43,4 +43,5 @@ cd ../frontend && npm run typecheck
 
 ## Despliegue
 
-Ver [DEPLOY.md](DEPLOY.md).
+En el servidor: `./deploy.sh` (pregunta los datos, crea el `.env` y despliega con
+Docker o Podman). Detalles en [DEPLOY.md](DEPLOY.md).

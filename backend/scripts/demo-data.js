@@ -38,7 +38,11 @@ async function call(method, path, body) {
 }
 
 async function main() {
-  if (env.NODE_ENV === 'production') throw new Error('Este script es solo para desarrollo');
+  // En servidores NODE_ENV siempre es production; el servidor de dev se marca con APP_ENV=dev (deploy.sh)
+  const appEnv = process.env.APP_ENV;
+  if (appEnv === 'prd' || (env.NODE_ENV === 'production' && appEnv !== 'dev')) {
+    throw new Error('Este script es solo para desarrollo (APP_ENV=dev)');
+  }
   const slug = arg('dojo') || 'seikoukan';
   const adminEmail = arg('admin');
   if (!adminEmail) throw new Error('Falta --admin tu@correo.mx');
