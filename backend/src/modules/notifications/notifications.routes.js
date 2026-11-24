@@ -152,6 +152,29 @@ announcements.post('/', requireRole(...STAFF), validate({
   res.status(201).json({ status: 'success', data: { id: r.insertId, recipients: sent } });
 });
 
+// Editar (no se vuelve a notificar; solo cambia lo que se ve en la app)
+announcements.patch('/:id', requireRole(...STAFF), validate({
+  params: z.object({ id }),
+  body: z.object({
+    title: z.string().trim().min(1).max(150).optional(),
+    body: z.string().trim().min(1).max(5000).optional(),
+    pinned: z.boolean().optional(),
+    expires_at: z.string().regex(/^\d{4}-\d{2}-\d{2}/).nullish(),
+  }).refine((o) => Object.keys(o).length > 0, 'Nada que actualizar'),
+}), async (req, res) => {
+  const b = req.valid.body;
+  const sets = []; const params = { id: req.valid.params.id };
+  for (const k of ['title', 'body', 'pinned', 'expires_at']) {
+    if (b[k] === undefined) continue;
+    sets.push(`${k} = :${k}`);
+    params[k] = typeof b[k] === 'boolean' ? Number(b[k]) : b[k];
+  }
+  const r = await req.tdb.query(`UPDATE announcements SET ${sets.join(', ')} WHERE dojo_id = :dojoId AND id = :id`, params);
+  if (r.affectedRows === 0) throw notFound('Aviso no encontrado');
+  await auditReq(req, req.tdb.executor, { action: 'update', entity: 'announcement', entityId: req.valid.params.id, after: b });
+  res.json({ status: 'success' });
+});
+
 announcements.delete('/:id', requireRole('admin', 'staff'), validate({ params: z.object({ id }) }), async (req, res) => {
   const r = await req.tdb.query('DELETE FROM announcements WHERE dojo_id = :dojoId AND id = :id', { id: req.valid.params.id });
   if (r.affectedRows === 0) throw notFound('Aviso no encontrado');

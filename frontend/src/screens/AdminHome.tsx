@@ -6,10 +6,10 @@ import React from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSession } from '../session/SessionProvider';
-import { adminHome, type DashboardSummary, type DashboardTodo, type Revenue } from '../api/home';
+import { adminHome, studentHome, type DashboardSummary, type DashboardTodo, type Revenue } from '../api/home';
 import { useApi } from '../utils/useApi';
 import { Screen } from '../ui/Screen';
-import { Button, Card, Divider, Loading, Notice, ProgressBar, SectionHeader, Text } from '../ui/primitives';
+import { Button, Card, Divider, IconButton, Loading, Notice, ProgressBar, SectionHeader, Text } from '../ui/primitives';
 import { palette, space, fonts } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 import { useIsWide } from '../navigation/AppShell';
@@ -183,13 +183,14 @@ export function AdminHome() {
   const router = useRouter();
   const wide = useIsWide();
   const summary = useApi(adminHome.summary);
+  const unread = useApi(studentHome.unread);
   const todo = useApi(adminHome.todo);
   const financial = hasRole('owner', 'admin', 'staff');
   const revenue = useApi(adminHome.revenue, [], { enabled: financial });
 
   const s = summary.data;
   const refreshing = summary.refreshing || todo.refreshing;
-  const reload = () => { summary.reload(); todo.reload(); if (financial) revenue.reload(); };
+  const reload = () => { summary.reload(); todo.reload(); unread.reload(); if (financial) revenue.reload(); };
 
   const kpis: React.ReactNode[] = [];
   if (s?.finance) {
@@ -217,9 +218,12 @@ export function AdminHome() {
   return (
     <Screen refreshing={refreshing} onRefresh={reload}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: space.md }}>
-        <View style={{ gap: 4 }}>
-          {s ? <Text variant="small" color={palette.ink2}>{capitalize(dayLong(s.today))}</Text> : null}
-          <Text variant={wide ? 'display' : 'title'} accessibilityRole="header">{greeting()}, {user?.first_name}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.md, flexGrow: 1, flexShrink: 1 }}>
+          <View style={{ gap: 4, flex: 1, minWidth: 0 }}>
+            {s ? <Text variant="small" color={palette.ink2}>{capitalize(dayLong(s.today))}</Text> : null}
+            <Text variant={wide ? 'display' : 'title'} accessibilityRole="header">{greeting()}, {user?.first_name}</Text>
+          </View>
+          <IconButton icon="bell" label={t('nav.notifications')} badge={(unread.data ?? 0) > 0} onPress={() => router.push('/notifications' as any)} />
         </View>
         {financial ? (
           <View style={{ flexDirection: 'row', gap: space.xs, flexWrap: 'wrap', flexShrink: 1, width: wide ? undefined : '100%' }}>

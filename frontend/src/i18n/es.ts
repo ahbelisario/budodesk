@@ -2,6 +2,7 @@ import { membersEs } from './members';
 import { classesEs } from './classes';
 import { billingEs } from './billing';
 import { ranksEs } from './ranks';
+import { dojoEs } from './dojo';
 export const es = {
   common: {
     loading: 'Cargando…',
@@ -170,6 +171,7 @@ export const es = {
     status_active: 'Activa', status_past_due: 'Con adeudo', status_paused: 'Pausada', status_pending: 'Por iniciar',
     status_cancelled: 'Cancelada', status_expired: 'Vencida',
   },
+  dojo: dojoEs,
   ranks: ranksEs,
   billing: billingEs,
   classes: classesEs,

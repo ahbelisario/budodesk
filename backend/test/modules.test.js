@@ -555,6 +555,13 @@ describe('avisos y notificaciones', () => {
     const list = ok(await api('get', '/announcements', T.student));
     assert.equal(list[0].title, 'No hay clase el lunes');
     assert.equal(ok(await api('get', '/announcements', T.instructor)).length, 1, 'staff ve todos');
+    // Editar: cambia lo que se ve, sin volver a notificar
+    ok(await api('patch', `/announcements/${r.id}`, T.admin, { title: 'No hay clase el lunes 16', pinned: true }));
+    const edited = ok(await api('get', '/announcements', T.student))[0];
+    assert.equal(edited.title, 'No hay clase el lunes 16');
+    assert.equal(edited.pinned, 1);
+    assert.equal((await api('get', '/notifications', T.mama)).body.meta.unread, 0);
+    assert.equal((await api('patch', `/announcements/${r.id}`, T.student, { title: 'x' })).status, 403);
   });
 
   test('registro de push token', async () => {

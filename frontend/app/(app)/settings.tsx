@@ -1,7 +1,10 @@
 import React from 'react';
-import { ComingSoon } from '@/ui/ComingSoon';
-import { t } from '@/i18n';
+import { Redirect } from 'expo-router';
+import { useSession } from '@/session/SessionProvider';
+import { Settings } from '@/screens/dojo/Settings';
 
 export default function Screen() {
-  return <ComingSoon title={t('nav.settings')} icon="settings" />;
+  const { hasRole } = useSession();
+  if (!hasRole('admin')) return <Redirect href="/home" />;
+  return <Settings />;
 }
