@@ -1,7 +1,2 @@
-import React from 'react';
-import { ComingSoon } from '@/ui/ComingSoon';
-import { t } from '@/i18n';
-
-export default function Screen() {
-  return <ComingSoon title={t('nav.progress')} icon="trending-up" />;
-}
+import { MyProgress } from '@/screens/ranks/MyProgress';
+export default MyProgress;

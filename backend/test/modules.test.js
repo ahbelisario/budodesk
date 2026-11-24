@@ -180,12 +180,20 @@ describe('grados y exámenes', () => {
 
     const mine = ok(await api('get', `/exams/mine?user_id=${ids.nuevo}`, T.admin));
     assert.equal(mine[0].fee, 350);
+    // También inscrito a otro examen para el mismo grado
+    const ex2 = ok(await api('post', '/exams', T.instructor, { discipline_id: 1, title: 'Examen extra', exam_date: today(20) }), 201);
+    const add2 = ok(await api('post', `/exams/${ex2.id}/candidates`, T.instructor, { user_ids: [ids.nuevo] }), 201);
 
     const res = ok(await api('put', `/exams/${ex.id}/candidates/${add.added[0].candidate_id}`, T.instructor, { status: 'passed', score: 92 }));
     assert.equal(res.promoted, true);
     const p = ok(await api('get', `/progress/members/${ids.nuevo}`, T.admin));
     assert.equal(p.disciplines[0].current.name, '5to Kyu');
     assert.equal(p.history[0].event_type, 'promotion');
+    // La otra inscripción al mismo grado se da de baja sola y su cuota se anula
+    const other = ok(await api('get', `/exams/${ex2.id}`, T.admin)).candidates[0];
+    assert.equal(other.status, 'withdrawn');
+    assert.equal(other.fee_status, 'void');
+    assert.ok(add2.added[0].charge_id);
     // No se puede "desaprobar" después de promover
     const back = await api('put', `/exams/${ex.id}/candidates/${add.added[0].candidate_id}`, T.instructor, { status: 'failed' });
     assert.equal(back.status, 409);

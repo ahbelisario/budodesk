@@ -174,7 +174,8 @@ export function Tabs<K extends string>({ tabs, value, onChange }: { tabs: { key:
   const wide = useIsWide();
 
   // Celular con muchas pestañas: todas visibles en uno o dos renglones, como botones
-  if (!wide && tabs.length > 3) {
+  // (o si los nombres no caben en una línea de celular)
+  if (!wide && (tabs.length > 3 || tabs.reduce((n, x) => n + x.label.length, 0) > 28)) {
     return (
       <View accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, paddingBottom: space.sm, borderBottomWidth: 1, borderBottomColor: palette.line }}>
         {tabs.map((tab) => {

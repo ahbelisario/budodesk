@@ -65,13 +65,14 @@ export function Button({ label, variant = 'primary', size = 'md', icon, loading,
   );
 }
 
-export function IconButton({ icon, label, onPress, badge }: { icon: IconName; label: string; onPress?: () => void; badge?: boolean }) {
+export function IconButton({ icon, label, onPress, badge, disabled, size = 'md' }: { icon: IconName; label: string; onPress?: () => void; badge?: boolean; disabled?: boolean; size?: 'sm' | 'md' }) {
   const { accent } = useTheme();
+  const d = size === 'sm' ? 34 : 44;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
-      style={({ pressed }) => ({ width: 44, height: 44, borderRadius: radius.pill, borderWidth: 1, borderColor: palette.line,
-        backgroundColor: palette.surface, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}>
-      <Icon name={icon} size={20} />
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} onPress={onPress} disabled={disabled} hitSlop={size === 'sm' ? 4 : 0}
+      style={({ pressed }) => ({ width: d, height: d, borderRadius: radius.pill, borderWidth: size === 'sm' ? 0 : 1, borderColor: palette.line,
+        backgroundColor: size === 'sm' ? 'transparent' : palette.surface, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.3 : pressed ? 0.7 : 1 })}>
+      <Icon name={icon} size={size === 'sm' ? 17 : 20} />
       {badge ? <View style={{ position: 'absolute', top: 9, right: 10, width: 9, height: 9, borderRadius: 9, backgroundColor: accent, borderWidth: 2, borderColor: palette.surface }} /> : null}
     </Pressable>
   );

@@ -224,6 +224,23 @@ router.put('/:id/candidates/:candidateId', requireRole(...STAFF), validate({
         awardedDate: c.exam_date, score: b.score, certificateNumber: b.certificate_number,
         examCandidateId: c.id, awardedBy: req.auth.userId,
       });
+      // Sus otras inscripciones pendientes a este grado (o a uno menor) ya no aplican
+      const stale = await t.query(
+        `SELECT oc.id, oc.charge_id FROM exam_candidates oc
+           JOIN exams oe ON oe.dojo_id = oc.dojo_id AND oe.id = oc.exam_id
+           JOIN ranks orr ON orr.dojo_id = oc.dojo_id AND orr.id = oc.target_rank_id
+           JOIN ranks nr ON nr.dojo_id = oc.dojo_id AND nr.id = :target
+          WHERE oc.dojo_id = :dojoId AND oc.user_id = :uid AND oc.id <> :cid AND oc.status = 'registered'
+            AND oe.discipline_id = :disc AND orr.track_id = nr.track_id AND orr.level <= nr.level FOR UPDATE`,
+        { target: c.target_rank_id, uid: c.user_id, cid: c.id, disc: c.discipline_id });
+      for (const o of stale) {
+        await t.query(`UPDATE exam_candidates SET status = 'withdrawn', feedback = 'Ya obtuvo el grado en otro examen'
+                        WHERE dojo_id = :dojoId AND id = :id`, { id: o.id });
+        if (o.charge_id) {
+          await t.query(`UPDATE charges SET status = 'void', voided_reason = 'Ya obtuvo el grado en otro examen'
+                          WHERE dojo_id = :dojoId AND id = :ch AND amount_paid = 0 AND status = 'pending'`, { ch: o.charge_id });
+        }
+      }
     }
     await auditReq(req, t.executor, { action: 'exam_result', entity: 'exam_candidate', entityId: c.id, before: { status: c.status }, after: b });
     const target = await t.one('SELECT name FROM ranks WHERE dojo_id = :dojoId AND id = :r', { r: c.target_rank_id });
