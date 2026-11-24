@@ -1,8 +1,7 @@
-FROM docker.io/library/mysql:latest
+# MySQL 8.4 LTS (versión fija: "latest" puede saltar de versión mayor sin avisar)
+FROM docker.io/library/mysql:8.4
 
-ENV MYSQL_ROOT_PASSWORD=Fsms123#$
-ENV MYSQL_DATABASE=fsms
-
-# Copy the SQL setup file into the initialization directory
-COPY schema/fsms.sql /docker-entrypoint-initdb.d/setup.sql
-RUN chmod 644 /docker-entrypoint-initdb.d/setup.sql
+# Solo se ejecutan cuando el volumen de datos está vacío (primer arranque).
+# Las credenciales llegan por variables de entorno desde compose (.env), nunca aquí.
+COPY --chmod=644 schema/01-schema.sql /docker-entrypoint-initdb.d/01-schema.sql
+COPY --chmod=644 schema/02-seed.sql   /docker-entrypoint-initdb.d/02-seed.sql

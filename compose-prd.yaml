@@ -1,65 +1,69 @@
-name: budodesk
+# Servidores (dev/QA y producción). Cada servidor tiene su propio .env
+# (copia de .env.example). Uso:
+#   docker compose -f compose-prd.yaml up -d --build
+name: ${COMPOSE_PROJECT_NAME:-budodesk}
 
 services:
   gateway:
-    build:
-      context: nginx
+    build: ./nginx
     ports:
-      - "8800:80"
-    networks:
-      - fsms-client
-      - fsms-server
+      - "${HTTP_PORT:-8800}:80"
     depends_on:
       - frontend
       - backend
+    networks: [edge, internal]
+    restart: unless-stopped
 
   frontend:
     build:
-      context: frontend/fsms
-      dockerfile: Dockerfile.prd
-    environment:
-      - NODE_ENV=production
-      - EXPO_PUBLIC_NGINX=yes
-    networks:
-      - fsms-client
-      - fsms-server
-    expose:
-      - "80"
+      context: ./frontend
+      args:
+        DEFAULT_DOJO_SLUG: ${DEFAULT_DOJO_SLUG:-}
+    networks: [edge]
+    restart: unless-stopped
 
   backend:
-    build:
-      context: backend
+    build: ./backend
+    env_file: .env
     environment:
-      - NODE_ENV=production  
-    expose:
-      - "3000"
-    networks:
-      - fsms-server
-      - internet  
+      NODE_ENV: production
+      DB_HOST: db
+      DB_PORT: 3306
+      UPLOAD_DIR: /usr/src/app/uploads
+    volumes:
+      - uploads:/usr/src/app/uploads
     depends_on:
-      - fsms-db
+      db:
+        condition: service_healthy
+    networks: [internal, egress]   # egress: correo (SMTP) y notificaciones push
+    restart: unless-stopped
 
-  fsms-db:
-    build:
-      context: db
-    expose:
-      - "3307"
-    ports:
-      - "3307:3306"
-    networks:
-      - fsms-client
-      - fsms-server  
-
-volumes:
-  frontend_node_modules: {}
+  db:
+    build: ./db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Falta DB_ROOT_PASSWORD en .env}
+      MYSQL_DATABASE: budodesk
+      MYSQL_USER: ${DB_USER:?Falta DB_USER en .env}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Falta DB_PASSWORD en .env}
+      TZ: UTC
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./backups:/backups:z       # :z = permiso SELinux (Fedora/RHEL); en otros sistemas no hace nada
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [internal]           # sin puertos publicados: solo el backend la ve
+    restart: unless-stopped
 
 networks:
-  fsms-client:
-    driver: bridge
-  
-  fsms-server:
-    driver: bridge
+  edge: {}
+  internal:
     internal: true
-  
-  internet:
-    driver: bridge
+  egress: {}
+
+volumes:
+  dbdata: {}     # ¡los datos viven aquí! `docker compose down -v` los BORRA
+  uploads: {}

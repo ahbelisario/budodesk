@@ -1,64 +1,52 @@
-name: budodesk
+# Desarrollo local en tu Mac: base de datos + backend.
+# La app la corres aparte con Expo (cd frontend && npm run web).
+#   docker compose -f compose-dev.yaml up -d --build
+name: budodesk-local
 
 services:
- # gateway:
- #   build:
- #     context: nginx
- #   ports:
- #     - "8800:80"
- #   networks:
- #     - fsms-client
- #     - fsms-server
- #   depends_on:
- #     - frontend
- #     - backend
-
- # frontend:
- #   build:
- #     context: frontend/fsms
- #     dockerfile: Dockerfile.dev
- #   environment:
- #     - NODE_ENV=development
- #     # Recomendación: en tu código usa fetch("/api/...") y no necesitas esta variable.
- #     # Si ya tienes variable, puedes usar:
- #     # - EXPO_PUBLIC_API_URL=/api
- #   networks:
- #     - fsms-client
- #     - fsms-server
- #   volumes:
- #     - ./frontend/fsms:/app
- #     - frontend_node_modules:/app/node_modules
- #   expose:
- #     - "19006"
- #     - "19000"
- #     - "19001"
- #     - "19002"
-
   backend:
-    build:
-      context: backend
-    expose:
-      - "3000"
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false   # opcional en local
+    environment:
+      NODE_ENV: development
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-budodesk_app}
+      DB_PASSWORD: ${DB_PASSWORD:-local-password}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-local-dev-secret-local-dev-secret-0001}
+      SMTP_HOST: ""        # en local los correos se imprimen en consola
+      CORS_ORIGINS: http://localhost:8081,http://localhost:19006
+      APP_BASE_URL: http://localhost:8081
+      TRUST_PROXY: 0
+      UPLOAD_DIR: /usr/src/app/uploads
     ports:
       - "3000:3000"
-    networks:
-      - fsms-server
+    volumes:
+      - uploads:/usr/src/app/uploads
     depends_on:
-      - fsms-db
+      db:
+        condition: service_healthy
 
-  fsms-db:
-    build:
-      context: db
-    expose:
-      - "3306"
+  db:
+    build: ./db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root-local}
+      MYSQL_DATABASE: budodesk
+      MYSQL_USER: ${DB_USER:-budodesk_app}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-local-password}
+      TZ: UTC
     ports:
-      - "3306:3306"
-    networks:
-      - fsms-server
+      - "3306:3306"   # para MySQL Workbench / TablePlus
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
 volumes:
-  frontend_node_modules: {}
-
-networks:
-  fsms-client: {}
-  fsms-server: {}
+  dbdata: {}
+  uploads: {}

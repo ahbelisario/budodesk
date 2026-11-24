@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "BudoDesk",
+    "slug": "budodesk",
+    "version": "0.9.0",
+    "orientation": "default",
+    "icon": "./assets/images/icon.png",
+    "scheme": "budodesk",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.budodesk.app" },
+    "android": {
+      "package": "com.budodesk.app",
+      "adaptiveIcon": { "backgroundColor": "#1A1A1A", "foregroundImage": "./assets/images/icon.png" },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "output": "single",
+      "bundler": "metro",
+      "favicon": "./assets/images/favicon.png",
+      "name": "BudoDesk",
+      "themeColor": "#1A1A1A",
+      "backgroundColor": "#F6F4EF"
+    },
+    "plugins": [
+      "expo-router",
+      ["expo-splash-screen", { "image": "./assets/images/icon.png", "imageWidth": 160, "resizeMode": "contain", "backgroundColor": "#F6F4EF" }],
+      "expo-secure-store",
+      "expo-localization",
+      "expo-font",
+      "expo-web-browser",
+      ["expo-image-picker", { "photosPermission": "BudoDesk usa tus fotos para tu foto de perfil." }],
+      ["expo-notifications", { "color": "#1A1A1A" }]
+    ],
+    "experiments": { "typedRoutes": false }
+  }
+}
