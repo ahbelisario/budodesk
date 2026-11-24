@@ -219,7 +219,7 @@ export function SearchField({ value, onChange, placeholder }: { value: string; o
       <Icon name="search" size={18} color={palette.ink3} />
       <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={palette.ink3} accessibilityLabel={placeholder}
         autoCorrect={false} autoCapitalize="none" returnKeyType="search"
-        style={{ flex: 1, height: '100%', fontFamily: fonts.body, fontSize: 15, color: palette.ink, outlineWidth: 0 } as TextStyle} />
+        style={{ flex: 1, minWidth: 0, height: '100%', fontFamily: fonts.body, fontSize: 15, color: palette.ink, outlineWidth: 0 } as TextStyle} />
       {value ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Limpiar" onPress={() => onChange('')} hitSlop={8}>
           <Icon name="x" size={16} color={palette.ink2} />

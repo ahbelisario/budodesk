@@ -222,9 +222,9 @@ export function AdminHome() {
           <Text variant={wide ? 'display' : 'title'} accessibilityRole="header">{greeting()}, {user?.first_name}</Text>
         </View>
         {financial ? (
-          <View style={{ flexDirection: 'row', gap: space.xs, flexWrap: 'wrap' }}>
-            <Button label={t('home.registerPayment')} variant="secondary" icon="dollar-sign" onPress={() => router.push('/billing?new=payment' as any)} />
-            <Button label={t('home.newMember')} icon="user-plus" onPress={() => router.push('/members?new=1' as any)} />
+          <View style={{ flexDirection: 'row', gap: space.xs, flexWrap: 'wrap', flexShrink: 1, width: wide ? undefined : '100%' }}>
+            <Button label={t('home.registerPayment')} variant="secondary" icon="dollar-sign" onPress={() => router.push('/billing?new=payment' as any)} style={wide ? undefined : { flexGrow: 1 }} />
+            <Button label={t('home.newMember')} icon="user-plus" onPress={() => router.push('/members/new' as any)} style={wide ? undefined : { flexGrow: 1 }} />
           </View>
         ) : null}
       </View>

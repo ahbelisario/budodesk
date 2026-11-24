@@ -194,7 +194,7 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field({ label, e
           onFocus={(e) => { setFocused(true); rest.onFocus?.(e); }}
           onBlur={(e) => { setFocused(false); rest.onBlur?.(e); }}
           {...rest}
-          style={[{ flex: 1, height: rest.multiline ? undefined : '100%', fontFamily: fonts.body, fontSize: 16, color: palette.ink, outlineWidth: 0 } as TextStyle, style]}
+          style={[{ flex: 1, minWidth: 0, height: rest.multiline ? undefined : '100%', fontFamily: fonts.body, fontSize: 16, color: palette.ink, outlineWidth: 0 } as TextStyle, style]}
         />
         {secureToggle ? (
           <Pressable accessibilityRole="button" accessibilityLabel={hidden ? 'Mostrar contraseña' : 'Ocultar contraseña'}
