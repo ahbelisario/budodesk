@@ -132,6 +132,41 @@ export function DateField({ label, value, onChange, error, hint }: { label: stri
 }
 
 // ---------------------------------------------------------------------------
+// Hora (HH:MM, 24 h). En web usa el selector nativo.
+// ---------------------------------------------------------------------------
+export const isValidTime = (s: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+
+export function TimeField({ label, value, onChange, error }: { label: string; value: string | null | undefined; onChange: (v: string | null) => void; error?: string | null }) {
+  const v = value ? value.slice(0, 5) : '';
+  const [text, setText] = useState(v);
+  React.useEffect(() => { setText(v); }, [v]);
+  if (typeof document !== 'undefined') {
+    return (
+      <View style={{ gap: 6 }}>
+        <Text variant="smallStrong">{label}</Text>
+        {React.createElement('input', {
+          type: 'time', value: v, 'aria-label': label, step: 300,
+          onChange: (e: any) => onChange(e.target.value ? String(e.target.value).slice(0, 5) : null),
+          style: { height: 48, borderRadius: radius.md, border: `1px solid ${error ? palette.danger : palette.line}`, padding: '0 14px',
+            fontFamily: fonts.body, fontSize: 16, color: palette.ink, background: palette.surface, boxSizing: 'border-box', width: '100%' },
+        })}
+        {error ? <Text variant="small" color={palette.danger}>{error}</Text> : null}
+      </View>
+    );
+  }
+  return (
+    <Field label={label} value={text} placeholder="19:00" keyboardType="numbers-and-punctuation" maxLength={5}
+      onChangeText={(x) => {
+        let c = x.replace(/[^\d:]/g, '');
+        if (/^\d{3,4}$/.test(c)) c = `${c.slice(0, c.length - 2).padStart(2, '0')}:${c.slice(-2)}`;
+        setText(c);
+        if (isValidTime(c)) onChange(c); else if (c === '') onChange(null);
+      }}
+      error={error ?? (text && !isValidTime(text) && text.length >= 4 ? 'HH:MM' : null)} />
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Pestañas
 // ---------------------------------------------------------------------------
 export function Tabs<K extends string>({ tabs, value, onChange }: { tabs: { key: K; label: string; badge?: number }[]; value: K; onChange: (k: K) => void }) {

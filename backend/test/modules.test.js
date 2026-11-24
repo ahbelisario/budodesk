@@ -416,6 +416,32 @@ describe('clases y reservas', () => {
     const quitar = ok(await api('patch', `/classes/series/${ids.series}`, T.admin, { days_of_week: ['mon'] }));
     assert.ok(quitar.sessions_removed > 0);
   });
+
+  test('clases por edad: se marcan, se filtran y no se pueden reservar fuera de rango', async () => {
+    await pool.query("UPDATE user_profiles SET date_of_birth = '1990-01-15' WHERE user_id = 2");
+    const s = ok(await api('post', '/classes/series', T.admin, {
+      title: 'Aikido infantil', discipline_id: 1, days_of_week: ['tue', 'thu'],
+      start_time: '22:00', end_time: '22:50', starts_on: today(), capacity: 10, min_age: 5, max_age: 12,
+    }), 201);
+    const all = ok(await api('get', `/classes/sessions?from=${today()}&to=${today(13)}`, T.student));
+    const kids = all.filter((x) => x.series_id === s.id);
+    assert.ok(kids.length > 0);
+    assert.equal(kids[0].fits, false);
+    assert.equal(kids[0].misfit_reason, 'age');
+    assert.equal(kids[0].min_age, 5);
+    const fit = ok(await api('get', `/classes/sessions?from=${today()}&to=${today(13)}&only_fit=true`, T.student));
+    assert.ok(!fit.some((x) => x.series_id === s.id));
+    assert.ok(fit.every((x) => x.fits));
+
+    const r = await api('post', `/classes/sessions/${kids[0].id}/book`, T.student, {});
+    assert.equal(r.status, 422);
+    assert.equal(r.body.code, 'AGE_RESTRICTED');
+    // El personal puede forzarlo
+    ok(await api('post', `/classes/sessions/${kids[0].id}/book`, T.admin, { user_id: 2, force: true }), 201);
+    const detail = ok(await api('get', `/classes/sessions/${kids[0].id}`, T.admin));
+    assert.equal(detail.min_age, 5);
+    assert.ok('checkin_code' in detail);
+  });
 });
 
 // ===========================================================================

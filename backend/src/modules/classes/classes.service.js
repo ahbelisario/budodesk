@@ -4,7 +4,7 @@
 const { tenantDb } = require('../../db/tenant');
 const { pool } = require('../../db/pool');
 const { AppError } = require('../../utils/errors');
-const { todayIn, addDays, weekdayIndex, weekStart, WEEKDAYS, zonedToUtc } = require('../../utils/dates');
+const { todayIn, addDays, weekdayIndex, weekStart, WEEKDAYS, zonedToUtc, ageOn } = require('../../utils/dates');
 
 const HORIZON_WEEKS = 8;
 const OCCUPYING = "('booked','attended','no_show')"; // ocupan lugar
@@ -124,6 +124,17 @@ async function book(t, { session, userId, bookedBy, dojo, force = false, now = n
     if (session.session_date > windowEnd) {
       throw ruleError('TOO_EARLY', `Puedes reservar con máximo ${dojo.booking_window_days} días de anticipación`);
     }
+    if (session.series_id) {
+      const range = await t.one('SELECT min_age, max_age FROM class_series WHERE dojo_id = :dojoId AND id = :id', { id: session.series_id });
+      if (range && (range.min_age != null || range.max_age != null)) {
+        const p = await t.one('SELECT p.date_of_birth FROM dojo_members m JOIN user_profiles p ON p.user_id = m.user_id WHERE m.dojo_id = :dojoId AND m.user_id = :u', { u: userId });
+        if (p?.date_of_birth && misfit({ dob: p.date_of_birth, disciplines: null }, { ...range, session_date: session.session_date })) {
+          const rangeTxt = range.min_age != null && range.max_age != null ? `de ${range.min_age} a ${range.max_age} años`
+            : range.min_age != null ? `de ${range.min_age} años en adelante` : `hasta ${range.max_age} años`;
+          throw ruleError('AGE_RESTRICTED', `Esta clase es para ${rangeTxt}`);
+        }
+      }
+    }
   }
 
   const existing = await t.one('SELECT id, status FROM class_bookings WHERE dojo_id = :dojoId AND session_id = :sid AND user_id = :u FOR UPDATE',
@@ -215,11 +226,44 @@ async function cancelBooking(t, { session, userId, dojo, byStaff = false, now = 
   return { status: newStatus, promoted_user_id: promoted };
 }
 
+/**
+ * Datos para saber qué clases le corresponden a una persona:
+ * fecha de nacimiento y disciplinas (grados + planes vigentes).
+ * disciplines = null significa "todas" (plan con todas las disciplinas o
+ * persona nueva sin grados ni membresía).
+ */
+async function fitProfile(t, userId, today) {
+  const p = await t.one('SELECT p.date_of_birth FROM dojo_members m JOIN user_profiles p ON p.user_id = m.user_id WHERE m.dojo_id = :dojoId AND m.user_id = :u', { u: userId });
+  const ranks = await t.query('SELECT discipline_id FROM member_ranks WHERE dojo_id = :dojoId AND user_id = :u', { u: userId });
+  const plans = await t.query(
+    `SELECT pl.all_disciplines, pd.discipline_id
+       FROM membership_members mm
+       JOIN memberships ms ON ms.dojo_id = mm.dojo_id AND ms.id = mm.membership_id
+       JOIN plans pl ON pl.dojo_id = ms.dojo_id AND pl.id = ms.plan_id
+       LEFT JOIN plan_disciplines pd ON pd.dojo_id = pl.dojo_id AND pd.plan_id = pl.id
+      WHERE mm.dojo_id = :dojoId AND mm.user_id = :u AND ms.status IN ('active','past_due','pending','paused')
+        AND (ms.end_date IS NULL OR ms.end_date >= :today)`, { u: userId, today });
+  let disciplines = new Set([...ranks.map((r) => r.discipline_id), ...plans.filter((x) => x.discipline_id).map((x) => x.discipline_id)]);
+  if (plans.some((x) => x.all_disciplines) || disciplines.size === 0) disciplines = null;
+  return { dob: p?.date_of_birth ?? null, disciplines };
+}
+
+/** ¿La clase le corresponde? Devuelve null si sí, o 'age' | 'discipline' */
+function misfit(profile, session) {
+  if (profile.dob && (session.min_age != null || session.max_age != null)) {
+    const age = ageOn(profile.dob, session.session_date);
+    if (session.min_age != null && age < session.min_age) return 'age';
+    if (session.max_age != null && age > session.max_age) return 'age';
+  }
+  if (profile.disciplines && session.discipline_id && !profile.disciplines.has(session.discipline_id)) return 'discipline';
+  return null;
+}
+
 async function lockSession(t, sessionId) {
   return t.one('SELECT * FROM class_sessions WHERE dojo_id = :dojoId AND id = :sessionId FOR UPDATE', { sessionId });
 }
 
 module.exports = {
   generateSessions, extendAllSeries, extendAllDojos, recount, findCoveringMembership,
-  book, cancelBooking, consumeCredit, lockSession, HORIZON_WEEKS, ruleError,
+  book, cancelBooking, consumeCredit, lockSession, HORIZON_WEEKS, ruleError, fitProfile, misfit,
 };

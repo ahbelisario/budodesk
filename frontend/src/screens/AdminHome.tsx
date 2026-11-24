@@ -63,7 +63,7 @@ function TodayClasses({ s }: { s: DashboardSummary }) {
                 {c.capacity != null ? <ProgressBar value={ratio} color={full ? accent : palette.ink} /> : null}
               </View>
               <View style={{ paddingLeft: wide ? 0 : 68 }}>
-                <Button label={t('home.takeAttendance')} size="sm" variant="secondary" onPress={() => router.push(`/classes?session=${c.id}` as any)} />
+                <Button label={t('home.takeAttendance')} size="sm" variant="secondary" onPress={() => router.push(`/classes/${c.id}` as any)} />
               </View>
             </View>
           </View>

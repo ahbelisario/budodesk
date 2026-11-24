@@ -68,6 +68,9 @@ export type Session = {
   capacity: number | null; booked_count: number; spots_left: number | null; waitlist_count: number; status: string;
   my_booking: string | null; my_waitlist_position: number | null;
   starts_at: string; ends_at: string; is_past: boolean; can_cancel_free: boolean;
+  series_id?: number | null; discipline_id?: number | null; instructor_id?: number | null; location_id?: number | null;
+  min_age?: number | null; max_age?: number | null; description?: string | null; cancel_reason?: string | null; notes?: string | null;
+  fits?: boolean; misfit_reason?: 'age' | 'discipline' | null;
 };
 export type SessionsMeta = { from: string; to: string; timezone: string; cancel_hours: number; booking_window_days: number };
 
@@ -92,7 +95,7 @@ export const studentHome = {
   progress: (userId: number) => api.get<{ disciplines: RankProgress[] }>('/progress/mine', { user_id: userId }),
   upcoming: (userId: number) => api.get<Booking[]>('/classes/bookings/mine', { user_id: userId, scope: 'upcoming', limit: 5 }),
   sessions: (userId: number, from: string, to: string) =>
-    api.getPage<Session[]>('/classes/sessions', { user_id: userId, from, to }).then((r) => ({ data: r.data, meta: r.meta as SessionsMeta })),
+    api.getPage<Session[]>('/classes/sessions', { user_id: userId, from, to, only_fit: true }).then((r) => ({ data: r.data, meta: r.meta as SessionsMeta })),
   memberships: (userId: number) => api.get<MyMembership[]>('/memberships/mine', { user_id: userId }),
   charges: () => api.get<MyCharges>('/charges/mine', { status: 'open' }),
   attendance: (userId: number) => api.get<AttendanceStats>('/classes/attendance/stats', { user_id: userId }),

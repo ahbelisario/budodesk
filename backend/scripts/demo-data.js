@@ -61,7 +61,7 @@ async function main() {
   const member = (body) => call('POST', '/members', body);
   const raul = await member({ email: 'raul.demo@budodesk.mx', first_name: 'Raúl', last_name: 'Uribe', roles: ['instructor', 'student'],
     initial_ranks: [{ discipline_id: aikido, rank_id: await rank('Aikido', 12), since_date: addDays(today, -900) }] });
-  const laura = await member({ email: 'laura.demo@budodesk.mx', first_name: 'Laura', last_name: 'Ortega', phone: '5512345678', roles: ['student', 'guardian'],
+  const laura = await member({ email: 'laura.demo@budodesk.mx', first_name: 'Laura', last_name: 'Ortega', phone: '5512345678', date_of_birth: addDays(today, -365 * 38), roles: ['student', 'guardian'],
     initial_ranks: [{ discipline_id: aikido, rank_id: await rank('Aikido', 3), since_date: addDays(today, -150) }] });
   const sofia = await member({ first_name: 'Sofía', last_name: 'Ortega', date_of_birth: addDays(today, -365 * 9 - 40), guardian_user_id: laura.id, guardian_relationship: 'mother',
     initial_ranks: [{ discipline_id: aikido, rank_id: await rank('Aikido', 3), since_date: addDays(today, -110) }] });
@@ -117,10 +117,10 @@ async function main() {
   // ---------------- Clases ----------------
   const starts = addDays(today, -56);
   const series = async (b) => call('POST', '/classes/series', { starts_on: starts, location_id: 1, ...b });
-  await series({ title: 'Aikido infantil', discipline_id: aikido, instructor_id: raul.id, days_of_week: ['mon', 'wed', 'fri'], start_time: '17:00', end_time: '18:00', capacity: 15 });
-  await series({ title: 'Aikido adultos', discipline_id: aikido, instructor_id: login.user.id, days_of_week: ['tue', 'thu'], start_time: '19:00', end_time: '20:30', capacity: 3 });
+  await series({ title: 'Aikido infantil', discipline_id: aikido, instructor_id: raul.id, days_of_week: ['mon', 'wed', 'fri'], start_time: '17:00', end_time: '18:00', capacity: 15, min_age: 5, max_age: 13 });
+  await series({ title: 'Aikido adultos', discipline_id: aikido, instructor_id: login.user.id, days_of_week: ['tue', 'thu'], start_time: '19:00', end_time: '20:30', capacity: 3, min_age: 14 });
   await series({ title: 'Karate Do', discipline_id: karate, instructor_id: login.user.id, days_of_week: ['sat'], start_time: '10:00', end_time: '11:30', capacity: 20 });
-  await series({ title: 'Aikido adultos (mañana)', discipline_id: aikido, instructor_id: raul.id, days_of_week: ['mon', 'wed', 'fri', 'sun'], start_time: '07:00', end_time: '08:00', capacity: 12 });
+  await series({ title: 'Aikido adultos (mañana)', discipline_id: aikido, instructor_id: raul.id, days_of_week: ['mon', 'wed', 'fri', 'sun'], start_time: '07:00', end_time: '08:00', capacity: 12, min_age: 14 });
 
   // Historial: sesiones pasadas con asistencia (las series solo generan de hoy en adelante)
   for (let d = addDays(today, -56); d < today; d = addDays(d, 1)) {

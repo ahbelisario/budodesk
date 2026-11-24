@@ -185,6 +185,7 @@ const SESSION_SELECT = `
   SELECT s.id, s.series_id, s.title, s.discipline_id, d.name AS discipline, COALESCE(cs.color, d.color) AS color,
          s.location_id, l.name AS location, s.instructor_id, CONCAT_WS(' ', ip.first_name, ip.last_name) AS instructor_name,
          s.session_date, s.start_time, s.end_time, s.capacity, s.booked_count, s.status, s.cancel_reason, s.notes, s.is_modified,
+         cs.min_age, cs.max_age, cs.description,
          (SELECT COUNT(*) FROM class_bookings w WHERE w.dojo_id = s.dojo_id AND w.session_id = s.id AND w.status = 'waitlisted') AS waitlist_count
     FROM class_sessions s
     LEFT JOIN class_series cs ON cs.dojo_id = s.dojo_id AND cs.id = s.series_id
@@ -201,6 +202,7 @@ router.get('/sessions', validate({
     from: date.optional(), to: date.optional(),
     discipline_id: id.optional(), instructor_id: id.optional(), user_id: id.optional(),
     include_cancelled: z.stringbool().optional(),
+    only_fit: z.stringbool().optional(), // solo las clases que le corresponden (edad/disciplina)
   }),
 }), async (req, res) => {
   const q = req.valid.query;
@@ -223,10 +225,11 @@ router.get('/sessions', validate({
       ORDER BY s.session_date, s.start_time`,
     { from, to, disc: q.discipline_id, inst: q.instructor_id, uid });
 
+  const fit = await svc.fitProfile(req.tdb, uid, today);
   const now = new Date();
   res.json({
     status: 'success',
-    data: rows.map((s) => {
+    data: rows.map((s) => ({ s, why: svc.misfit(fit, s) })).filter((x) => !q.only_fit || !x.why).map(({ s, why }) => {
       const startsAt = zonedToUtc(s.session_date, s.start_time, dojo.timezone);
       const endsAt = zonedToUtc(s.session_date, s.end_time, dojo.timezone);
       return {
@@ -236,6 +239,7 @@ router.get('/sessions', validate({
         spots_left: s.capacity == null ? null : Math.max(0, s.capacity - s.booked_count),
         is_past: endsAt <= now,
         can_cancel_free: startsAt - now > dojo.booking_cancel_hours * 3600000,
+        fits: !why, misfit_reason: why,
       };
     }),
     meta: { from, to, timezone: dojo.timezone, cancel_hours: dojo.booking_cancel_hours, booking_window_days: dojo.booking_window_days },
@@ -247,6 +251,7 @@ router.get('/sessions/:id', validate({ params: z.object({ id }) }), async (req, 
   if (!s) throw notFound('Clase no encontrada');
   if (hasRole(req, ...STAFF)) {
     const dojo = await getDojo(req);
+    s.checkin_code = (await req.tdb.one('SELECT checkin_code FROM class_sessions WHERE dojo_id = :dojoId AND id = :id', { id: s.id })).checkin_code;
     s.roster = await req.tdb.query(
       `SELECT b.id AS booking_id, b.user_id, p.first_name, p.last_name, p.photo_url, b.status, b.waitlist_position,
               b.checked_in_at, b.checkin_method, b.membership_id,

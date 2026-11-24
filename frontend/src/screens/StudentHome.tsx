@@ -31,7 +31,7 @@ function thisWeek() {
 // ---------------------------------------------------------------------------
 // Ver como (tutor → menores)
 // ---------------------------------------------------------------------------
-function ViewAs() {
+export function ViewAs() {
   const { user, minors, actingUserId, setActingUser, hasRole } = useSession();
   if (!user || minors.length === 0) return null;
   const people = [
