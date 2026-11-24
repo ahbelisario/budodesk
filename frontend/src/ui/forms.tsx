@@ -171,6 +171,27 @@ export function TimeField({ label, value, onChange, error }: { label: string; va
 // ---------------------------------------------------------------------------
 export function Tabs<K extends string>({ tabs, value, onChange }: { tabs: { key: K; label: string; badge?: number }[]; value: K; onChange: (k: K) => void }) {
   const { accent } = useTheme();
+  const wide = useIsWide();
+
+  // Celular con muchas pestañas: todas visibles en uno o dos renglones, como botones
+  if (!wide && tabs.length > 3) {
+    return (
+      <View accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, paddingBottom: space.sm, borderBottomWidth: 1, borderBottomColor: palette.line }}>
+        {tabs.map((tab) => {
+          const on = tab.key === value;
+          return (
+            <Pressable key={tab.key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => onChange(tab.key)}
+              style={{ height: 36, paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 6,
+                borderColor: on ? accent : palette.line, backgroundColor: on ? accent : palette.surface }}>
+              <Text variant="smallStrong" color={on ? '#FFFFFF' : palette.ink}>{tab.label}</Text>
+              {tab.badge ? <View style={{ backgroundColor: on ? '#FFFFFF' : accent, borderRadius: radius.pill, paddingHorizontal: 6 }}><Text variant="caption" color={on ? accent : '#FFFFFF'}>{tab.badge}</Text></View> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  }
+
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityRole="tablist"
       style={{ borderBottomWidth: 1, borderBottomColor: palette.line, flexGrow: 0 }} contentContainerStyle={{ gap: 4 }}>

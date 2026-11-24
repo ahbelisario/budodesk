@@ -200,7 +200,7 @@ export function RanksTab({ userId, canEdit, structure, onChanged }: { userId: nu
       {disciplines.length === 0 ? (
         <Card><EmptyState icon="award" title={mt('noRanks')} body={canEdit ? mt('noRanksBody') : undefined} /></Card>
       ) : (
-        <View style={{ flexDirection: wide ? 'row' : 'column', flexWrap: 'wrap', gap: space.lg }}>
+        <View style={{ flexDirection: wide ? 'row' : 'column', flexWrap: wide ? 'wrap' : 'nowrap', gap: space.lg }}>
           {disciplines.map((d) => (
             <View key={`${d.discipline_id}-${d.current.rank_id}-${d.current.stripes}`} style={{ flexGrow: 1, flexBasis: wide ? 420 : undefined, minWidth: 0 }}>
               <DisciplineCard d={d} userId={userId} canEdit={canEdit} onPromote={open} onChanged={() => { data.reload(); onChanged(); }} />

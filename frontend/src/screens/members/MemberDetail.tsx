@@ -59,7 +59,7 @@ function SummaryTab({ m, financial, go }: { m: Member; financial: boolean; go: (
   );
   const box = { flexGrow: 1, flexBasis: wide ? 280 : undefined, minWidth: 0 } as const;
   return (
-    <View style={{ flexDirection: wide ? 'row' : 'column', flexWrap: 'wrap', gap: space.lg }}>
+    <View style={{ flexDirection: wide ? 'row' : 'column', flexWrap: wide ? 'wrap' : 'nowrap', gap: space.lg }}>
       <Card style={box}>
         <SectionHeader title={mt('currentRank')} action={link('ranks', mt('tab_ranks'))} />
         {m.ranks.length === 0 ? <Text color={palette.ink2}>{mt('noRanks')}</Text> : m.ranks.map((r) => (
@@ -400,12 +400,10 @@ export function MemberDetail() {
         {isStaff ? <PhotoPicker overlay name={name} photoUrl={m.photo_url} userId={m.id} size={wide ? 84 : 64} onUploaded={(url) => member.setData({ ...m, photo_url: url })} />
           : <Avatar name={name} photoUrl={m.photo_url} size={wide ? 84 : 64} />}
         <View style={{ gap: 6, flex: 1, minWidth: 0 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' }}>
-            <Text variant="title" accessibilityRole="header" style={{ flexShrink: 1 }}>{name}</Text>
+          <Text variant="title" accessibilityRole="header">{name}</Text>
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
             <StatusBadge status={m.status} />
             {m.is_minor ? <Badge label={mt('minor')} tone="info" /> : null}
-          </View>
-          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
             {m.roles.filter((r) => r !== 'admin' || !m.roles.includes('owner')).map((r) => <Badge key={r} label={t(`roles.${r}`)} />)}
           </View>
           {meta ? <Text variant="small" color={palette.ink2}>{meta}</Text> : null}
