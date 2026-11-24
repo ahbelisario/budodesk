@@ -194,7 +194,7 @@ export function Tabs<K extends string>({ tabs, value, onChange }: { tabs: { key:
 // ---------------------------------------------------------------------------
 export function FilterChips<K extends string>({ options, value, onChange, label }: { options: { key: K; label: string }[]; value: K; onChange: (k: K) => void; label: string }) {
   return (
-    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
+    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, flexShrink: 1, maxWidth: '100%' }}>
       {options.map((o) => {
         const on = o.key === value;
         return (

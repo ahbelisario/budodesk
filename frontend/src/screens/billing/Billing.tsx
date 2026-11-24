@@ -96,6 +96,7 @@ function ChargesTab({ onChanged, version }: { onChanged: () => void; version: nu
   const [msg, setMsg] = useState<Msg>(null);
   const rows = data.data?.data ?? [];
   const meta = data.data?.meta as { total?: number; balance?: number } | undefined;
+  const forWhom = (c: ChargeRow) => (c.member_names && c.member_names !== c.user_name.split(' ')[0] ? bt('forMembers', { names: c.member_names }) : null);
 
   return (
     <View style={{ gap: space.md }}>
@@ -114,23 +115,47 @@ function ChargesTab({ onChanged, version }: { onChanged: () => void; version: nu
           return (
             <View key={c.id}>
               {i > 0 ? <Divider /> : null}
-              <View style={{ flexDirection: wide ? 'row' : 'column', alignItems: wide ? 'center' : 'stretch', gap: space.sm, padding: space.md }}>
-                <Pressable accessibilityRole="link" onPress={() => router.push(`/members/${c.user_id}?tab=billing` as never)} style={{ flex: 2, minWidth: 0 }}>
-                  <Text variant="bodyStrong" numberOfLines={1}>{c.user_name}</Text>
-                  <Text variant="small" color={palette.ink2} numberOfLines={1}>{c.description}</Text>
-                  {c.member_names && c.member_names !== c.user_name.split(' ')[0] ? <Text variant="caption" color={palette.ink2}>{bt('forMembers', { names: c.member_names })}</Text> : null}
-                </Pressable>
-                <View style={{ flex: 1.2, gap: 2 }}>
-                  <Text variant="small" color={open && c.due_date < today ? palette.danger : palette.ink2}>{dueLabel(c.due_date, today, open)}</Text>
+              {wide ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md }}>
+                  <Pressable accessibilityRole="link" onPress={() => router.push(`/members/${c.user_id}?tab=billing` as never)} style={{ flex: 2, minWidth: 0 }}>
+                    <Text variant="bodyStrong" numberOfLines={1}>{c.user_name}</Text>
+                    <Text variant="small" color={palette.ink2} numberOfLines={1}>{c.description}</Text>
+                    {forWhom(c) ? <Text variant="caption" color={palette.ink2}>{forWhom(c)}</Text> : null}
+                  </Pressable>
+                  <View style={{ flex: 1.2, gap: 2 }}>
+                    <Text variant="small" color={open && c.due_date < today ? palette.danger : palette.ink2}>{dueLabel(c.due_date, today, open)}</Text>
+                    {c.status === 'partial' ? <Text variant="caption" color={palette.ink2}>{bt('paidOf', { paid: money(c.amount_paid, c.currency), total: money(c.total, c.currency) })}</Text> : null}
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, justifyContent: 'flex-end', flex: 1.6 }}>
+                    <Text variant="bodyStrong" style={{ minWidth: 84, textAlign: 'right' }}>{money(open ? c.balance : c.total, c.currency)}</Text>
+                    <ChargeStatus status={c.status} due={c.due_date} today={today} />
+                    {open ? <Button label={bt('collect')} size="sm" onPress={() => setPay(c)} /> : null}
+                    {open && admin && Number(c.amount_paid) === 0 ? <Button label={bt('voidCharge')} size="sm" variant="ghost" onPress={() => setVoiding(c)} /> : null}
+                  </View>
+                </View>
+              ) : (
+                // Celular: nombre y monto arriba, detalle en medio, acciones abajo
+                <View style={{ gap: 6, padding: space.md }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.sm }}>
+                    <Pressable accessibilityRole="link" onPress={() => router.push(`/members/${c.user_id}?tab=billing` as never)} style={{ flex: 1, minWidth: 0 }}>
+                      <Text variant="bodyStrong" numberOfLines={1}>{c.user_name}</Text>
+                    </Pressable>
+                    <Text variant="bodyStrong">{money(open ? c.balance : c.total, c.currency)}</Text>
+                  </View>
+                  <Text variant="small" color={palette.ink2}>{c.description}{forWhom(c) ? ` · ${forWhom(c)}` : ''}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' }}>
+                    <ChargeStatus status={c.status} due={c.due_date} today={today} />
+                    <Text variant="small" color={open && c.due_date < today ? palette.danger : palette.ink2} style={{ flexShrink: 1 }}>{dueLabel(c.due_date, today, open)}</Text>
+                  </View>
                   {c.status === 'partial' ? <Text variant="caption" color={palette.ink2}>{bt('paidOf', { paid: money(c.amount_paid, c.currency), total: money(c.total, c.currency) })}</Text> : null}
+                  {open ? (
+                    <View style={{ flexDirection: 'row', gap: space.xs, marginTop: 2 }}>
+                      <Button label={bt('collect')} size="sm" icon="dollar-sign" onPress={() => setPay(c)} style={{ flexGrow: 1 }} />
+                      {admin && Number(c.amount_paid) === 0 ? <Button label={bt('voidCharge')} size="sm" variant="secondary" onPress={() => setVoiding(c)} /> : null}
+                    </View>
+                  ) : null}
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, justifyContent: wide ? 'flex-end' : 'space-between', flex: wide ? 1.6 : undefined }}>
-                  <Text variant="bodyStrong" style={{ minWidth: 84, textAlign: wide ? 'right' : 'left' }}>{money(open ? c.balance : c.total, c.currency)}</Text>
-                  <ChargeStatus status={c.status} due={c.due_date} today={today} />
-                  {open ? <Button label={bt('collect')} size="sm" onPress={() => setPay(c)} /> : null}
-                  {open && admin && Number(c.amount_paid) === 0 ? <Button label={bt('voidCharge')} size="sm" variant="ghost" onPress={() => setVoiding(c)} /> : null}
-                </View>
-              </View>
+              )}
             </View>
           );
         })}
@@ -187,9 +212,14 @@ function PaymentsTab({ onChanged, version }: { onChanged: () => void; version: n
                     {[dateTimeShort(p.paid_at), t(`members.m_${p.method}`), p.reference, p.received_by_name ? bt('receivedBy', { name: p.received_by_name }) : null].filter(Boolean).join(' · ')}
                   </Text>
                 </Pressable>
-                {cancelled ? <Badge label={bt('cancelledPayment')} /> : null}
-                <Text variant="bodyStrong" style={{ textDecorationLine: cancelled ? 'line-through' : 'none' }}>{money(p.amount, p.currency)}</Text>
-                {admin && p.status === 'completed' && !p.provider ? <Button label={bt('cancelPayment')} size="sm" variant="ghost" onPress={() => setCancelling(p)} /> : null}
+                <View style={{ alignItems: 'flex-end', gap: 4, flexDirection: wide ? 'row' : 'column', ...(wide ? { alignItems: 'center', gap: space.sm } : {}) }}>
+                  {cancelled ? <Badge label={bt('cancelledPayment')} /> : null}
+                  <Text variant="bodyStrong" style={{ textDecorationLine: cancelled ? 'line-through' : 'none' }}>{money(p.amount, p.currency)}</Text>
+                  {admin && p.status === 'completed' && !p.provider
+                    ? (wide ? <Button label={bt('cancelPayment')} size="sm" variant="ghost" onPress={() => setCancelling(p)} />
+                      : <Pressable accessibilityRole="button" hitSlop={8} onPress={() => setCancelling(p)}><Text variant="caption" color={palette.danger} style={{ textDecorationLine: 'underline' }}>{bt('cancelPayment')}</Text></Pressable>)
+                    : null}
+                </View>
               </View>
             </View>
           );
@@ -206,6 +236,7 @@ function PaymentsTab({ onChanged, version }: { onChanged: () => void; version: n
 // ---------------------------------------------------------------------------
 export function Billing() {
   useLanguage();
+  const wide = useIsWide();
   const params = useLocalSearchParams<{ new?: string; tab?: string }>();
   const { hasRole } = useSession();
   const admin = hasRole('admin');
@@ -237,14 +268,26 @@ export function Billing() {
 
   return (
     <Screen maxWidth={1200} onRefresh={changed}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: space.md, flexWrap: 'wrap' }}>
-        <Text variant="title" accessibilityRole="header">{bt('billing')}</Text>
-        <View style={{ flexDirection: 'row', gap: space.xs, flexWrap: 'wrap' }}>
-          {admin ? <Button label={bt('runBilling')} variant="ghost" icon="refresh-cw" loading={running} onPress={run} /> : null}
-          <Button label={bt('newCharge')} variant="secondary" icon="file-plus" onPress={() => setChargeOpen(true)} />
-          <Button label={bt('registerPayment')} icon="dollar-sign" onPress={() => setPayOpen(true)} />
+      {wide ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: space.md }}>
+          <Text variant="title" accessibilityRole="header">{bt('billing')}</Text>
+          <View style={{ flexDirection: 'row', gap: space.xs, flexWrap: 'wrap', flexShrink: 1, justifyContent: 'flex-end' }}>
+            {admin ? <Button label={bt('runBilling')} variant="ghost" icon="refresh-cw" loading={running} onPress={run} /> : null}
+            <Button label={bt('newCharge')} variant="secondary" icon="file-plus" onPress={() => setChargeOpen(true)} />
+            <Button label={bt('registerPayment')} icon="dollar-sign" onPress={() => setPayOpen(true)} />
+          </View>
         </View>
-      </View>
+      ) : (
+        // Celular: la acción principal a todo lo ancho y las secundarias debajo
+        <View style={{ gap: space.sm }}>
+          <Text variant="title" accessibilityRole="header">{bt('billing')}</Text>
+          <Button label={bt('registerPayment')} icon="dollar-sign" onPress={() => setPayOpen(true)} />
+          <View style={{ flexDirection: 'row', gap: space.xs, flexWrap: 'wrap' }}>
+            <Button label={bt('newCharge')} variant="secondary" size="sm" icon="file-plus" onPress={() => setChargeOpen(true)} style={{ flexGrow: 1 }} />
+            {admin ? <Button label={bt('runBilling')} variant="secondary" size="sm" icon="refresh-cw" loading={running} onPress={run} style={{ flexGrow: 1 }} /> : null}
+          </View>
+        </View>
+      )}
       {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
 
       <Card style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.lg }}>
