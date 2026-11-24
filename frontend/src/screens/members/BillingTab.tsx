@@ -13,40 +13,60 @@ import { useIsWide } from '../../navigation/AppShell';
 import { t } from '../../i18n';
 import { dayShort, dayShortTs, money } from '../../utils/format';
 import { mt } from './bits';
+import { PersonPicker, type PickedPerson } from './PersonPicker';
 
 const CH_TONE: Record<string, Tone> = { pending: 'warning', partial: 'warning', paid: 'success', void: 'neutral', refunded: 'neutral' };
 
+/**
+ * Registrar un pago manual. Sin userId, primero se elige a la persona
+ * (y se sugiere su saldo pendiente).
+ */
 export function PaymentDialog({ visible, userId, name, suggested, onClose, onSaved }: {
-  visible: boolean; userId: number; name: string; suggested?: number; onClose: () => void; onSaved: () => void;
+  visible: boolean; userId?: number; name?: string; suggested?: number; onClose: () => void; onSaved: () => void;
 }) {
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<'cash' | 'transfer' | 'card' | 'other'>('cash');
   const [reference, setReference] = useState('');
+  const [who, setWho] = useState<PickedPerson | null>(null);
+  const [owed, setOwed] = useState<number | undefined>(suggested);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   React.useEffect(() => {
-    if (visible) { setAmount(suggested ? String(suggested) : ''); setReference(''); setErr(null); setMethod('cash'); }
+    if (visible) { setAmount(suggested ? String(suggested) : ''); setReference(''); setErr(null); setMethod('cash'); setWho(null); setOwed(suggested); }
   }, [visible, suggested]);
 
+  async function pick(p: PickedPerson | null) {
+    setWho(p); setOwed(undefined); setAmount('');
+    if (!p) return;
+    try {
+      const m = await membersApi.get(p.id);
+      const due = Number(m.balance_due ?? 0);
+      if (due > 0) { setOwed(due); setAmount(String(due)); }
+    } catch { /* sin saldo sugerido */ }
+  }
+
+  const target = userId ?? who?.id;
   const n = Number(amount.replace(',', '.'));
   async function save() {
+    if (!target) { setErr(t('billing.pickPersonFirst')); return; }
     if (!(n > 0)) { setErr(mt('required')); return; }
     setSaving(true); setErr(null);
     try {
-      await membersApi.registerPayment({ user_id: userId, amount: Math.round(n * 100) / 100, method, reference: reference.trim() || null });
+      await membersApi.registerPayment({ user_id: target, amount: Math.round(n * 100) / 100, method, reference: reference.trim() || null });
       onSaved();
     } catch (e) { setErr(errorMessage(e)); } finally { setSaving(false); }
   }
 
   return (
-    <Dialog visible={visible} onClose={onClose} title={`${mt('registerPayment')} · ${name}`}
+    <Dialog visible={visible} onClose={onClose} title={name ? `${mt('registerPayment')} · ${name}` : mt('registerPayment')}
       actions={<>
         <Button label={t('common.cancel')} variant="ghost" onPress={onClose} />
-        <Button label={mt('registerPayment')} icon="check" loading={saving} onPress={save} />
+        <Button label={mt('registerPayment')} icon="check" loading={saving} disabled={!target} onPress={save} />
       </>}>
       <View style={{ gap: space.md }}>
+        {!userId ? <PersonPicker label={t('billing.person')} value={who} onChange={pick} /> : null}
         <Field label={mt('amount')} value={amount} onChangeText={(v) => setAmount(v.replace(/[^\d.,]/g, ''))} keyboardType="decimal-pad"
-          hint={suggested ? `${mt('balance')}: ${money(suggested)}` : undefined} />
+          hint={owed ? `${mt('balance')}: ${money(owed)}` : undefined} />
         <Select label={mt('method')} value={method} onChange={(v) => v && setMethod(v)}
           options={(['cash', 'transfer', 'card', 'other'] as const).map((m) => ({ value: m, label: mt(`m_${m}`) }))} />
         {method !== 'cash' ? <Field label={mt('reference')} value={reference} onChangeText={setReference} /> : null}
@@ -98,7 +118,7 @@ export function BillingTab({ userId, name, onChanged }: { userId: number; name: 
             <>
               <Text color={palette.ink2}>{mt('noMembershipBody')}</Text>
               <Button label={mt('assignMembership')} size="sm" variant="secondary" icon="plus" style={{ alignSelf: 'flex-start' }}
-                onPress={() => router.push(`/memberships?new=1&user_id=${userId}` as never)} />
+                onPress={() => router.push(`/memberships/new?user_id=${userId}` as never)} />
             </>
           ) : current.map((m, i) => (
             <View key={m.id} style={{ gap: 4 }}>

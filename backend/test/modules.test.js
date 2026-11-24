@@ -310,6 +310,28 @@ describe('membresías y facturación', () => {
     assert.ok(r.next_billing_date);
   });
 
+  test('saldo a favor: un pago sin adeudos queda como crédito y se aplica solo al siguiente cargo', async () => {
+    const before = ok(await api('get', `/charges/mine?user_id=${ids.mama}`, T.admin));
+    assert.equal(Number(before.summary.balance_due), 0);
+    const startCredit = Number(before.summary.credit);
+    ok(await api('post', '/payments', T.admin, { user_id: ids.mama, amount: 500, method: 'transfer', reference: 'ADELANTO' }), 201);
+    const mid = ok(await api('get', `/charges/mine?user_id=${ids.mama}`, T.admin));
+    assert.equal(Number(mid.summary.credit), startCredit + 500);
+    const ch = ok(await api('post', '/charges', T.admin, { user_id: ids.mama, type: 'event', description: 'Seminario', amount: 300 }), 201);
+    const after = ok(await api('get', `/charges/${ch.id}`, T.admin));
+    assert.equal(after.status, 'paid');
+    assert.equal(after.payments.length, 1);
+    const end = ok(await api('get', `/charges/mine?user_id=${ids.mama}`, T.admin));
+    assert.equal(Number(end.summary.credit), startCredit + 200);
+    assert.equal(Number(end.summary.balance_due), 0);
+    // Limpieza: cancelar el adelanto revierte la aplicación; luego se anula el cargo
+    const adelanto = (await pool.query("SELECT id FROM payments WHERE reference = 'ADELANTO'"))[0][0].id;
+    ok(await api('post', `/payments/${adelanto}/cancel`, T.admin, { reason: 'prueba' }));
+    assert.equal(ok(await api('get', `/charges/${ch.id}`, T.admin)).status, 'pending');
+    ok(await api('post', `/charges/${ch.id}/void`, T.admin, { reason: 'prueba' }));
+    assert.equal(Number(ok(await api('get', `/charges/mine?user_id=${ids.mama}`, T.admin)).summary.credit), startCredit);
+  });
+
   test('el alumno no puede editar membresías (bug del sistema anterior)', async () => {
     const r = await api('patch', `/memberships/${ids.msAlumno}`, T.student, { price: 1 });
     assert.equal(r.status, 403);

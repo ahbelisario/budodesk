@@ -31,7 +31,10 @@ charges.use(authenticate, requireDojo);
 const CHARGE_SELECT = `
   SELECT c.id, c.user_id, CONCAT_WS(' ', p.first_name, p.last_name) AS user_name, c.membership_id, c.type,
          c.description, c.period_start, c.period_end, c.amount, c.discount_amount, c.total, c.amount_paid,
-         (c.total - c.amount_paid) AS balance, c.currency, c.due_date, c.status, c.voided_reason, c.created_at
+         (c.total - c.amount_paid) AS balance, c.currency, c.due_date, c.status, c.voided_reason, c.created_at,
+         (SELECT GROUP_CONCAT(xp.first_name ORDER BY xp.first_name SEPARATOR ', ')
+            FROM membership_members x JOIN user_profiles xp ON xp.user_id = x.user_id
+           WHERE x.dojo_id = c.dojo_id AND x.membership_id = c.membership_id) AS member_names
     FROM charges c JOIN user_profiles p ON p.user_id = c.user_id`;
 
 charges.get('/', requireRole(...STAFF), validate({
@@ -80,6 +83,7 @@ charges.get('/mine', validate({ query: z.object({ user_id: id.optional(), status
             MIN(due_date) AS next_due_date
        FROM charges WHERE dojo_id = :dojoId AND user_id = :uid AND status IN ('pending','partial')`,
     { uid, today: todayIn((await getDojo(req)).timezone) });
+  bal.credit = await svc.creditBalance(req.tdb, uid, (await getDojo(req)).currency);
   res.json({ status: 'success', data: { summary: bal, charges: rows } });
 });
 

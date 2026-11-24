@@ -18,7 +18,55 @@ async function createCharge(t, c) {
       amount: round2(c.amount), discount_amount: round2(c.discount_amount ?? 0),
       currency: c.currency, due_date: c.due_date, created_by: c.created_by ?? null,
     });
+  // Si la persona tiene saldo a favor (pagos sin aplicar), se usa de inmediato
+  await applyCredit(t, c.user_id, c.currency);
   return r.insertId;
+}
+
+/** Pagos completados de la persona con dinero aún sin aplicar */
+async function creditPayments(t, userId, currency, lock = false) {
+  return t.query(
+    `SELECT py.id, ROUND(py.amount - py.refunded_amount - COALESCE((SELECT SUM(pa.amount) FROM payment_allocations pa
+              WHERE pa.dojo_id = py.dojo_id AND pa.payment_id = py.id), 0), 2) AS unapplied
+       FROM payments py
+      WHERE py.dojo_id = :dojoId AND py.user_id = :userId AND py.currency = :currency AND py.status = 'completed'
+     HAVING unapplied > 0.004
+      ORDER BY py.id ${lock ? 'FOR UPDATE' : ''}`, { userId, currency });
+}
+
+/** Saldo a favor total de una persona */
+async function creditBalance(t, userId, currency) {
+  const rows = await creditPayments(t, userId, currency);
+  return round2(rows.reduce((s, r) => s + Number(r.unapplied), 0));
+}
+
+/** Aplica el saldo a favor a los cargos pendientes más antiguos */
+async function applyCredit(t, userId, currency) {
+  const credits = await creditPayments(t, userId, currency, true);
+  if (!credits.length) return 0;
+  const open = await t.query(
+    `SELECT id, total - amount_paid AS open FROM charges
+      WHERE dojo_id = :dojoId AND user_id = :userId AND currency = :currency AND status IN ('pending','partial')
+      ORDER BY due_date, id FOR UPDATE`, { userId, currency });
+  let applied = 0;
+  for (const ch of open) {
+    let need = round2(Number(ch.open));
+    for (const p of credits) {
+      if (need <= 0) break;
+      const avail = round2(Number(p.unapplied));
+      if (avail <= 0) continue;
+      const a = round2(Math.min(avail, need));
+      await t.query(
+        `INSERT INTO payment_allocations (dojo_id, payment_id, charge_id, amount) VALUES (:dojoId, :p, :c, :a)
+         ON DUPLICATE KEY UPDATE amount = amount + VALUES(amount)`, { p: p.id, c: ch.id, a });
+      await t.query('UPDATE charges SET amount_paid = amount_paid + :a WHERE dojo_id = :dojoId AND id = :c', { a, c: ch.id });
+      p.unapplied = round2(avail - a);
+      need = round2(need - a);
+      applied = round2(applied + a);
+    }
+    await refreshChargeStatus(t, ch.id);
+  }
+  return applied;
 }
 
 /** Recalcula status de un cargo a partir de amount_paid */
@@ -102,4 +150,4 @@ async function reactivatePaidMemberships(t, userId, today) {
                          AND c.status IN ('pending','partial') AND c.due_date < :today)`, { userId, today });
 }
 
-module.exports = { createCharge, allocatePayment, reversePayment, refreshChargeStatus, reactivatePaidMemberships, round2 };
+module.exports = { createCharge, allocatePayment, reversePayment, refreshChargeStatus, reactivatePaidMemberships, applyCredit, creditBalance, round2 };

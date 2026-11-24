@@ -1,5 +1,6 @@
 import { membersEs } from './members';
 import { classesEs } from './classes';
+import { billingEs } from './billing';
 export const es = {
   common: {
     loading: 'Cargando…',
@@ -168,6 +169,7 @@ export const es = {
     status_active: 'Activa', status_past_due: 'Con adeudo', status_paused: 'Pausada', status_pending: 'Por iniciar',
     status_cancelled: 'Cancelada', status_expired: 'Vencida',
   },
+  billing: billingEs,
   classes: classesEs,
   members: membersEs,
   roles: {

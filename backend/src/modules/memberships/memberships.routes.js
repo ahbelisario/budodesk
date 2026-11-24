@@ -244,8 +244,10 @@ router.patch('/:id', requireRole(...STAFF), validate({
       const d = await t.one('SELECT name, type, value FROM discounts WHERE dojo_id = :dojoId AND id = :id AND active = 1', { id: b.discount_id });
       if (!d) throw badRequest('Descuento no válido');
       Object.assign(b, { discount_type: d.type, discount_value: d.value, discount_reason: b.discount_reason ?? d.name });
-    } else if (b.discount_id === null) {
+    } else if (b.discount_id === null && !b.discount_type) {
       Object.assign(b, { discount_type: 'none', discount_value: null });
+    } else if (b.discount_id === undefined && b.discount_type) {
+      b.discount_id = null; // descuento personalizado: ya no es uno del catálogo
     }
     if (b.payer_user_id) {
       const p = await t.one(`SELECT 1 AS ok FROM dojo_members WHERE dojo_id = :dojoId AND user_id = :u AND status = 'active'`, { u: b.payer_user_id });

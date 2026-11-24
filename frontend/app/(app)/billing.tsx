@@ -1,7 +1,10 @@
 import React from 'react';
-import { ComingSoon } from '@/ui/ComingSoon';
-import { t } from '@/i18n';
+import { Redirect } from 'expo-router';
+import { useSession } from '@/session/SessionProvider';
+import { Billing } from '@/screens/billing/Billing';
 
 export default function Screen() {
-  return <ComingSoon title={t('nav.billing')} icon="dollar-sign" />;
+  const { hasRole } = useSession();
+  if (!hasRole('admin', 'staff')) return <Redirect href="/payments" />;
+  return <Billing />;
 }
