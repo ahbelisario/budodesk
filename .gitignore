@@ -16,3 +16,6 @@ backend/uploads/
 # Sistema
 .DS_Store
 *.log
+
+# Archivos de trabajo de Claude (pueden traer datos de alumnos)
+/Claude [Oo]utputs/
