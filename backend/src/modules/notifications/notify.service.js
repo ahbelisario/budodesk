@@ -100,6 +100,8 @@ async function processDeliveries({ limit = 100 } = {}) {
  */
 async function paymentReminders(dojoId, today, { addDays }) {
   const out = { due: 0, overdue: 0 };
+  const [[cfg]] = await pool.query('SELECT payment_reminders FROM dojo_payment_settings WHERE dojo_id = :d', { d: dojoId });
+  if (cfg && !cfg.payment_reminders) return { ...out, disabled: true };
   for (const [type, dateExpr, title] of [
     ['payment_due', addDays(today, 3), 'Tu pago vence pronto'],
     ['payment_overdue', addDays(today, -1), 'Tienes un pago vencido'],

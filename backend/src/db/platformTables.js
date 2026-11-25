@@ -1,7 +1,9 @@
 /**
- * Tablas de la plataforma (respaldos). Están también en db/schema/01-schema.sql;
- * aquí se crean si faltan para que una base ya en uso no falle al actualizar.
- * Solo CREATE TABLE IF NOT EXISTS: nunca modifica ni borra nada.
+ * Ajustes de esquema que se aplican al arrancar, para que una base ya en uso no
+ * falle al actualizar (todo está también en db/schema/01-schema.sql):
+ *  - tablas de la plataforma (respaldos): CREATE TABLE IF NOT EXISTS
+ *  - columnas nuevas: se agregan solo si faltan
+ * Nunca modifica ni borra datos.
  */
 const { pool } = require('./pool');
 
@@ -53,8 +55,20 @@ const DDL = [
   'INSERT IGNORE INTO platform_settings (id) VALUES (1)',
 ];
 
+/** [tabla, columna, definición] */
+const COLUMNS = [
+  ['dojo_payment_settings', 'auto_charges', "TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'generar automáticamente el cargo de cada periodo de las membresías'"],
+  ['dojo_payment_settings', 'payment_reminders', "TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'avisos de pago por vencer / vencido'"],
+];
+
 async function ensurePlatformTables(executor = pool) {
   for (const sql of DDL) await executor.query(sql);
+  for (const [table, column, def] of COLUMNS) {
+    const [rows] = await executor.query(
+      `SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+      [table, column]);
+    if (!rows.length) await executor.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${def}`);
+  }
 }
 
 module.exports = { ensurePlatformTables, DDL };

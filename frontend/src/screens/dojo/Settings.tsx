@@ -284,6 +284,7 @@ function PaymentsTab() {
       await dojoApi.updatePaymentSettings({
         accepts_cash: !!v.accepts_cash, accepts_transfer: !!v.accepts_transfer, transfer_instructions: v.transfer_instructions?.trim() || null,
         late_fee_amount: fee.trim() ? Number(fee.replace(',', '.')) : null, late_fee_grace_days: grace.trim() ? Number(grace) : null,
+        auto_charges: v.auto_charges !== 0, payment_reminders: v.payment_reminders !== 0,
       });
       setMsg({ tone: 'success', text: dt('saved') });
     } catch (e) { setMsg({ tone: 'danger', text: errorMessage(e) }); } finally { setBusy(false); }
@@ -298,6 +299,13 @@ function PaymentsTab() {
           <Field label={dt('f_transferInstructions')} value={v.transfer_instructions ?? ''} onChangeText={(x) => setV({ ...v, transfer_instructions: x })} multiline
             hint={dt('f_transferInstructionsHint')} style={{ minHeight: 96, paddingVertical: 12, textAlignVertical: 'top' }} />
         ) : null}
+      </Card>
+      <Card style={{ gap: space.sm }}>
+        <Text variant="bodyStrong">{dt('automation')}</Text>
+        <SwitchRow label={dt('f_autoCharges')} hint={dt(v.auto_charges === 0 ? 'f_autoChargesOff' : 'f_autoChargesHint')}
+          value={v.auto_charges !== 0} onChange={(x) => setV({ ...v, auto_charges: x ? 1 : 0 })} />
+        <SwitchRow label={dt('f_reminders')} hint={dt('f_remindersHint')}
+          value={v.payment_reminders !== 0} onChange={(x) => setV({ ...v, payment_reminders: x ? 1 : 0 })} />
       </Card>
       <Card style={{ gap: space.md }}>
         <Text variant="bodyStrong">{dt('lateFees')}</Text>

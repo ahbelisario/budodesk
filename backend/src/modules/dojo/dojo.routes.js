@@ -76,9 +76,10 @@ dojo.patch('/', requireRole('admin'), validate({
 dojo.get('/payment-settings', requireRole('admin'), async (req, res) => {
   const row = await req.tdb.one(
     `SELECT paypal_enabled, paypal_mode, paypal_client_id, (paypal_secret_enc IS NOT NULL) AS paypal_secret_set,
-            accepts_cash, accepts_transfer, transfer_instructions, late_fee_amount, late_fee_grace_days
+            accepts_cash, accepts_transfer, transfer_instructions, late_fee_amount, late_fee_grace_days,
+            auto_charges, payment_reminders
        FROM dojo_payment_settings WHERE dojo_id = :dojoId`);
-  res.json({ status: 'success', data: row ?? { paypal_enabled: 0, accepts_cash: 1, accepts_transfer: 1 } });
+  res.json({ status: 'success', data: row ?? { paypal_enabled: 0, accepts_cash: 1, accepts_transfer: 1, auto_charges: 1, payment_reminders: 1 } });
 });
 
 dojo.patch('/payment-settings', requireRole('admin'), validate({
@@ -87,10 +88,12 @@ dojo.patch('/payment-settings', requireRole('admin'), validate({
     transfer_instructions: z.string().trim().max(2000).nullish(),
     late_fee_amount: z.coerce.number().min(0).max(1000000).nullish(),
     late_fee_grace_days: z.coerce.number().int().min(0).max(60).nullish(),
+    auto_charges: z.boolean().optional(), payment_reminders: z.boolean().optional(),
   }).refine((o) => Object.keys(o).length > 0, 'Nada que actualizar'),
 }), async (req, res) => {
   const set = buildSet(req.valid.body, { accepts_cash: 'accepts_cash', accepts_transfer: 'accepts_transfer',
-    transfer_instructions: 'transfer_instructions', late_fee_amount: 'late_fee_amount', late_fee_grace_days: 'late_fee_grace_days' });
+    transfer_instructions: 'transfer_instructions', late_fee_amount: 'late_fee_amount', late_fee_grace_days: 'late_fee_grace_days',
+    auto_charges: 'auto_charges', payment_reminders: 'payment_reminders' });
   await req.tdb.query('INSERT IGNORE INTO dojo_payment_settings (dojo_id) VALUES (:dojoId)');
   await req.tdb.query(`UPDATE dojo_payment_settings SET ${set.sql} WHERE dojo_id = :dojoId`, set.params);
   await auditReq(req, req.tdb.executor, { action: 'update', entity: 'payment_settings', entityId: req.auth.dojoId, after: req.valid.body });

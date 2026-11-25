@@ -95,6 +95,8 @@ CREATE TABLE `dojo_payment_settings` (
   `transfer_instructions` TEXT NULL COMMENT 'CLABE/banco que verá el alumno',
   `late_fee_amount`       DECIMAL(10,2) NULL,
   `late_fee_grace_days`   SMALLINT UNSIGNED NULL,
+  `auto_charges`      TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'generar automáticamente el cargo de cada periodo de las membresías',
+  `payment_reminders` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'avisos de pago por vencer / vencido',
   `updated_at`            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`dojo_id`),
   CONSTRAINT `fk_dps_dojo` FOREIGN KEY (`dojo_id`) REFERENCES `dojos` (`id`) ON DELETE CASCADE

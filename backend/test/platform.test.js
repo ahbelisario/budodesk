@@ -179,6 +179,64 @@ describe('dojos', () => {
 });
 
 // ===========================================================================
+describe('cobro por dojo: cargos automáticos y recordatorios', () => {
+  const { today } = require('./helpers');
+  let msId;
+
+  before(async () => {
+    const [[plan]] = await pool.query("SELECT id, price FROM plans WHERE dojo_id = 1 AND name = 'Individual Mensual'");
+    const [r] = await pool.query(
+      `INSERT INTO memberships (dojo_id, plan_id, payer_user_id, status, start_date, current_period_start, current_period_end,
+                                next_billing_date, price, currency, auto_renew)
+       VALUES (1, :p, 2, 'active', :s, :s, :e, :nb, :price, 'MXN', 1)`,
+      { p: plan.id, s: today(-70), e: today(-40), nb: today(-39), price: plan.price });
+    msId = r.insertId;
+    await pool.query('INSERT INTO membership_members (dojo_id, membership_id, user_id) VALUES (1, :m, 2)', { m: msId });
+  });
+
+  test('los ajustes de cobro traen los dos interruptores prendidos', async () => {
+    const s = ok(await api('get', '/dojo/payment-settings', T.super));
+    assert.equal(s.auto_charges, 1);
+    assert.equal(s.payment_reminders, 1);
+  });
+
+  test('cargos automáticos apagados: el periodo avanza pero no se crea el cargo', async () => {
+    ok(await api('patch', '/dojo/payment-settings', T.super, { auto_charges: false }));
+    const { runBillingForDojo } = require('../src/modules/memberships/memberships.service');
+    const r = await runBillingForDojo(1);
+    assert.ok(r.renewed >= 1);
+    const [[c]] = await pool.query('SELECT COUNT(*) n FROM charges WHERE membership_id = :m', { m: msId });
+    assert.equal(Number(c.n), 0);
+    const [[ms]] = await pool.query('SELECT next_billing_date, status FROM memberships WHERE id = :m', { m: msId });
+    assert.ok(ms.next_billing_date > today(), 'el periodo quedó al corriente');
+    assert.equal(ms.status, 'active');
+  });
+
+  test('cargos automáticos prendidos: se crea el cargo de cada periodo', async () => {
+    ok(await api('patch', '/dojo/payment-settings', T.super, { auto_charges: true }));
+    await pool.query('UPDATE memberships SET next_billing_date = :nb WHERE id = :m', { nb: today(-9), m: msId });
+    await require('../src/modules/memberships/memberships.service').runBillingForDojo(1);
+    const [[c]] = await pool.query('SELECT COUNT(*) n FROM charges WHERE membership_id = :m', { m: msId });
+    assert.ok(Number(c.n) >= 1);
+  });
+
+  test('recordatorios apagados: no se avisa de pagos por vencer', async () => {
+    const { paymentReminders } = require('../src/modules/notifications/notify.service');
+    const { addDays } = require('../src/utils/dates');
+    await pool.query(
+      `INSERT INTO charges (dojo_id, user_id, type, description, amount, currency, due_date)
+       VALUES (1, 2, 'other', 'Cuota de prueba', 300, 'MXN', :d)`, { d: today(3) });
+    ok(await api('patch', '/dojo/payment-settings', T.super, { payment_reminders: false }));
+    const off = await paymentReminders(1, today(), { addDays });
+    assert.equal(off.disabled, true);
+    assert.equal(off.due, 0);
+    ok(await api('patch', '/dojo/payment-settings', T.super, { payment_reminders: true }));
+    const on = await paymentReminders(1, today(), { addDays });
+    assert.ok(on.due >= 1);
+  });
+});
+
+// ===========================================================================
 describe('respaldos', () => {
   let first;
 

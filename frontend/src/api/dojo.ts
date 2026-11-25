@@ -24,6 +24,7 @@ export type DojoSettings = {
 export type PaymentSettings = {
   paypal_enabled: number; accepts_cash: number; accepts_transfer: number; transfer_instructions: string | null;
   late_fee_amount: number | null; late_fee_grace_days: number | null;
+  auto_charges?: number; payment_reminders?: number;
 };
 export type Location = { id: number; name: string; address: string | null; active: number };
 export type AuditEntry = { id: number; action: string; entity: string; entity_id: string | null; before_data: unknown; after_data: unknown; created_at: string; user_name: string | null };
@@ -41,7 +42,7 @@ export const dojoApi = {
   settings: () => api.get<DojoSettings>('/dojo'),
   updateSettings: (b: Partial<Omit<DojoSettings, 'require_membership_to_book'>> & { require_membership_to_book?: boolean }) => api.patch<DojoSettings>('/dojo', b),
   paymentSettings: () => api.get<PaymentSettings>('/dojo/payment-settings'),
-  updatePaymentSettings: (b: { accepts_cash?: boolean; accepts_transfer?: boolean; transfer_instructions?: string | null; late_fee_amount?: number | null; late_fee_grace_days?: number | null }) =>
+  updatePaymentSettings: (b: { accepts_cash?: boolean; accepts_transfer?: boolean; transfer_instructions?: string | null; late_fee_amount?: number | null; late_fee_grace_days?: number | null; auto_charges?: boolean; payment_reminders?: boolean }) =>
     api.patch('/dojo/payment-settings', b),
   locations: () => api.get<Location[]>('/dojo/locations'),
   createLocation: (b: { name: string; address?: string | null }) => api.post<Location>('/dojo/locations', b),

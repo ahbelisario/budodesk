@@ -58,6 +58,7 @@ async function chargePeriod(t, ms, { start, end, dueDate, lang, createdBy }) {
  *  1. pending → active cuando llega la fecha de inicio
  *  2. pausas: active ↔ paused según las fechas de congelamiento
  *  3. renovaciones: genera el cargo del siguiente periodo y avanza el periodo
+ *     (si el dojo apagó «cargos automáticos», solo avanza el periodo: el cargo lo crea el dojo)
  *  4. cancelaciones programadas al fin de periodo
  *  5. paquetes / pruebas vencidos o sin clases → expired
  *  6. adeudos vencidos → past_due (+ recargo si el dojo lo configuró)
@@ -65,7 +66,7 @@ async function chargePeriod(t, ms, { start, end, dueDate, lang, createdBy }) {
 async function runBillingForDojo(dojoId, { now = new Date() } = {}) {
   const tdb = tenantDb(dojoId);
   const dojo = await tdb.one(
-    `SELECT d.timezone, d.language, s.late_fee_amount, s.late_fee_grace_days
+    `SELECT d.timezone, d.language, s.late_fee_amount, s.late_fee_grace_days, COALESCE(s.auto_charges, 1) AS auto_charges
        FROM dojos d LEFT JOIN dojo_payment_settings s ON s.dojo_id = d.id WHERE d.id = :dojoId`);
   const today = todayIn(dojo.timezone, now);
   const stats = { activated: 0, paused: 0, resumed: 0, renewed: 0, cancelled: 0, expired: 0, past_due: 0, late_fees: 0 };
@@ -99,7 +100,7 @@ async function runBillingForDojo(dojoId, { now = new Date() } = {}) {
       while (start <= today && (!ms.end_date || start <= ms.end_date) && guard++ < 24) {
         periodStart = start;
         end = periodEnd(start, ms.interval_unit, ms.interval_count || 1);
-        await chargePeriod(t, ms, { start, end, dueDate: start, lang: dojo.language });
+        if (dojo.auto_charges) await chargePeriod(t, ms, { start, end, dueDate: start, lang: dojo.language });
         start = addDays(end, 1);
         stats.renewed++;
       }
