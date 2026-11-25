@@ -41,6 +41,18 @@ async function supportDojo(executor, dojoId) {
   return d ? { ...d, roles: expandRoles(['owner']), support: true } : null;
 }
 
+/**
+ * Superadmin sin dojos propios (o que pide uno ajeno por subdominio): entra en modo
+ * soporte al dojo pedido, o al primero activo.
+ */
+async function superadminDojo(executor, dojoSlug) {
+  const d = await one(executor,
+    `SELECT id FROM dojos
+      WHERE (:slug IS NULL OR slug = :slug)
+      ORDER BY status IN ('trial','active') DESC, id LIMIT 1`, { slug: dojoSlug || null });
+  return d ? supportDojo(executor, d.id) : null;
+}
+
 async function getUserSummary(executor, userId) {
   return one(executor,
     `SELECT u.id, u.email, u.username, u.is_superadmin, u.email_verified_at,
@@ -162,13 +174,19 @@ async function login({ identifier, password, dojoSlug, ip, userAgent }) {
 
   const summary = await getUserSummary(pool, user.id);
   const dojos = await listUserDojos(pool, user.id);
-  const dojo = pickDojo(dojos, { dojoSlug, lastDojoId: summary.last_dojo_id });
+  let dojo = null;
+  try {
+    dojo = pickDojo(dojos, { dojoSlug, lastDojoId: summary.last_dojo_id });
+  } catch (e) {
+    if (!summary.is_superadmin) throw e; // el superadmin puede entrar a un dojo ajeno (modo soporte)
+  }
+  if (!dojo && summary.is_superadmin && (dojos.length === 0 || dojoSlug)) dojo = await superadminDojo(pool, dojoSlug);
 
   const tokens = await withTransaction(async (conn) => {
     await conn.query(
       `UPDATE users SET failed_login_count = 0, locked_until = NULL, last_login_at = NOW() WHERE id = :id`,
       { id: user.id });
-    if (dojo) await rememberDojo(conn, user.id, dojo.id);
+    if (dojo && !dojo.support) await rememberDojo(conn, user.id, dojo.id);
     return createSession(conn, { userId: user.id, dojoId: dojo?.id, ip, userAgent });
   });
 

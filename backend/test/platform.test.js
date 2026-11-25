@@ -146,6 +146,26 @@ describe('dojos', () => {
     assert.notEqual(st.last_dojo_id, 2);
   });
 
+  test('superadmin que no es miembro de ningún dojo entra en modo soporte', async () => {
+    const bcrypt = require('bcrypt');
+    const hash = await bcrypt.hash(PASSWORD, 4);
+    await pool.query(`INSERT INTO users (email, password_hash, email_verified_at, is_superadmin) VALUES ('plataforma@budodesk.mx', :h, NOW(), 1)`, { h: hash });
+    await pool.query(`INSERT INTO user_profiles (user_id, first_name) SELECT id, 'Plataforma' FROM users WHERE email = 'plataforma@budodesk.mx'`);
+    const r = ok(await request(app).post('/api/v2/auth/login').send({ identifier: 'plataforma@budodesk.mx', password: PASSWORD }));
+    assert.equal(r.dojo.support, true);
+    assert.equal(r.dojo.slug, 'seikoukan');
+    assert.deepEqual(r.dojos, []);
+    ok(await api('get', '/platform/dojos', r.access_token));
+    ok(await api('get', '/members', r.access_token));
+    // Con subdominio entra a ese dojo
+    const r2 = ok(await request(app).post('/api/v2/auth/login').send({ identifier: 'plataforma@budodesk.mx', password: PASSWORD, dojo_slug: 'otro' }));
+    assert.equal(r2.dojo.slug, 'otro');
+    // Y al refrescar la sesión sigue dentro
+    const rr = ok(await request(app).post('/api/v2/auth/refresh').send({ refresh_token: r2.refresh_token }));
+    assert.equal(rr.dojo.slug, 'otro');
+    assert.equal(rr.dojo.support, true);
+  });
+
   test('suspender un dojo corta el acceso a sus miembros, no al superadmin', async () => {
     const d = ok(await api('patch', '/platform/dojos/2', T.super, { status: 'suspended' }));
     assert.equal(d.status, 'suspended');
