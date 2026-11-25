@@ -13,8 +13,8 @@ async function main() {
     console.log(`BudoDesk API v2 escuchando en :${env.PORT} (${env.NODE_ENV})`);
   });
   if (env.BILLING_SCHEDULER) require('./jobs/scheduler').start();
-  // Respaldos programados: igual que la facturación, solo en una réplica
-  if (env.BILLING_SCHEDULER) require('./modules/platform/backups.service').startScheduler();
+  // Respaldos programados (si corres varias réplicas, déjalo activo solo en una)
+  if (env.BACKUP_SCHEDULER) require('./modules/platform/backups.service').startScheduler();
 
   const shutdown = (signal) => {
     console.log(`${signal} recibido, cerrando…`);

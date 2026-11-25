@@ -42,6 +42,8 @@ const schema = z.object({
   // ¡Guárdala también fuera del servidor! Sin ella no se pueden abrir las copias de S3.
   BACKUP_ENCRYPTION_KEY: z.string().min(32, 'BACKUP_ENCRYPTION_KEY debe tener al menos 32 caracteres').optional()
     .or(z.literal('').transform(() => undefined)),
+  // Respaldos programados (Plataforma → Respaldos). Independiente de la facturación.
+  BACKUP_SCHEDULER: z.stringbool().default(true),
   // Ejecuta la facturación diaria dentro del proceso (desactívalo si usas cron externo)
   BILLING_SCHEDULER: z.stringbool().default(true),
 
