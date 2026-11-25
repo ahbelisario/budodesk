@@ -16,7 +16,9 @@ services:
       DB_USER: ${DB_USER:-budodesk_app}
       DB_PASSWORD: ${DB_PASSWORD:-local-password}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-local-dev-secret-local-dev-secret-0001}
-      SMTP_HOST: ""        # en local los correos se imprimen en consola
+      # Correo: usa el SMTP del .env (SMTP_HOST, SMTP_USER, SMTP_PASS…). Con SMTP_HOST vacío,
+      # los correos solo se imprimen en el log: docker compose -f compose-dev.yaml logs -f backend
+      SMTP_HOST: ${SMTP_HOST:-}
       CORS_ORIGINS: http://localhost:8081,http://localhost:19006
       APP_BASE_URL: http://localhost:8081
       TRUST_PROXY: 0
