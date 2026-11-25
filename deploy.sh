@@ -172,6 +172,19 @@ mask() { local s=$1; [ -n "$s" ] || { printf '(vacío)'; return; }; printf '%s�
 
 KNOWN_KEYS="APP_ENV CONTAINER_ENGINE COMPOSE_PROJECT_NAME HTTP_PORT DEFAULT_DOJO_SLUG APP_BASE_URL DB_ROOT_PASSWORD DB_USER DB_PASSWORD DB_NAME JWT_ACCESS_SECRET BACKUP_ENCRYPTION_KEY ACCESS_TOKEN_TTL_MIN REFRESH_TOKEN_TTL_DAYS CORS_ORIGINS TRUST_PROXY SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASS MAIL_FROM BILLING_SCHEDULER"
 
+# Variables del .env actual que este script no maneja (se conservan tal cual).
+# Va en su propia función: la bash 3.2 de macOS no acepta un case dentro de $( ).
+extra_env_lines() {
+  local l k
+  grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE" | while IFS= read -r l; do
+    k=${l%%=*}
+    case " $KNOWN_KEYS " in
+      *" $k "*) ;;
+      *) printf '%s\n' "$l" ;;
+    esac
+  done || true
+}
+
 write_env() {
   local tmp k extra
   tmp=$(mktemp "./.env.tmp.XXXXXX")
@@ -211,8 +224,7 @@ write_env() {
     printf 'BILLING_SCHEDULER=%s\n' "$BILLING_SCHEDULER"
     # Conserva otras variables que ya existían (p. ej. LOGIN_MAX_FAILED)
     if [ -f "$ENV_FILE" ]; then
-      extra=$(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE" | while IFS= read -r l; do
-        k=${l%%=*}; case " $KNOWN_KEYS " in *" $k "*) ;; *) printf '%s\n' "$l" ;; esac; done || true)
+      extra=$(extra_env_lines)
       if [ -n "$extra" ]; then printf '\n# ---- Otras (conservadas) ----\n%s\n' "$extra"; fi
     fi
   } > "$tmp"
