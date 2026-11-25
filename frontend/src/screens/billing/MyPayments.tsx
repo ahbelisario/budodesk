@@ -4,9 +4,11 @@ import { View } from 'react-native';
 import { billingApi } from '../../api/billing';
 import { todayYmd } from '../../api/classes';
 import { useSession } from '../../session/SessionProvider';
+import { onlineApi } from '../../api/online';
+import { PayOnline } from './PayOnline';
 import { useApi } from '../../utils/useApi';
 import { Screen } from '../../ui/Screen';
-import { Badge, Card, Divider, EmptyState, Icon, Loading, Notice, SectionHeader, Text } from '../../ui/primitives';
+import { Card, Divider, EmptyState, Icon, Loading, Notice, SectionHeader, Text } from '../../ui/primitives';
 import { palette, space, fonts } from '../../theme/tokens';
 import { useIsWide } from '../../navigation/AppShell';
 import { t, useLanguage } from '../../i18n';
@@ -22,6 +24,7 @@ export function MyPayments() {
   const memberships = useApi(() => billingApi.myMemberships(), []);
   const payments = useApi(() => billingApi.myPayments(), []);
   const methods = useApi(() => billingApi.paymentMethods(), []);
+  const online = useApi(() => onlineApi.options(), []);
   const reload = () => { account.reload(); memberships.reload(); payments.reload(); };
 
   if (account.loading || memberships.loading) return <Loading />;
@@ -50,7 +53,13 @@ export function MyPayments() {
 
       <View style={{ flexDirection: wide ? 'row' : 'column', gap: space.lg, alignItems: 'flex-start' }}>
         <View style={{ flex: wide ? 1.4 : undefined, alignSelf: 'stretch', gap: space.lg }}>
-          {open.length ? (
+          {open.length && online.data?.length ? (
+            <PayOnline options={online.data} charges={open.map((c) => ({
+              id: c.id, description: c.description, balance: Number(c.balance), currency: c.currency, noteDanger: c.due_date < today,
+              note: `${dueLabel(c.due_date, today, true)}${c.member_names && c.member_names !== user?.first_name ? ` · ${bt('forMembers', { names: c.member_names })}` : ''}`,
+            }))} />
+          ) : null}
+          {open.length && !online.data?.length ? (
             <Card>
               <SectionHeader title={bt('pendingCharges')} />
               {open.map((c, i) => (
@@ -127,7 +136,12 @@ export function MyPayments() {
               </View>
             </View>
           ) : null}
-          <Badge label={bt('payOnlineSoon')} tone="info" />
+          {online.data?.length ? (
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+              <Icon name="globe" size={18} color={palette.ink2} />
+              <Text style={{ flex: 1 }}>{online.data.map((o) => o.name).join(' · ')}</Text>
+            </View>
+          ) : null}
         </Card>
       </View>
     </Screen>

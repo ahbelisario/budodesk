@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { useSession } from '../session/SessionProvider';
 import { studentHome, type Booking, type MyMembership, type RankProgress, type Session } from '../api/home';
 import { useApi } from '../utils/useApi';
+import { onlineApi } from '../api/online';
 import { Screen } from '../ui/Screen';
 import { Dialog } from '../ui/Dialog';
 import { Badge, Belt, Button, Card, Divider, Field, IconButton, Loading, Notice, ProgressBar, SectionHeader, Text } from '../ui/primitives';
@@ -212,6 +213,7 @@ export function StudentHome() {
   const [code, setCode] = useState('');
   const [payOpen, setPayOpen] = useState(false);
   const payMethods = useApi(studentHome.paymentMethods, [], { enabled: payOpen });
+  const online = useApi(() => onlineApi.options(), [], { enabled: payOpen });
 
   const refreshClasses = () => { upcoming.reload(); sessions.reload(); stats.reload(); };
   const reloadAll = () => { refreshClasses(); progress.reload(); memberships.reload(); charges.reload(); news.reload(); unread.reload(); };
@@ -377,7 +379,9 @@ export function StudentHome() {
                 {payMethods.data.transfer_instructions ? <Text selectable color={palette.ink2}>{payMethods.data.transfer_instructions}</Text> : null}
               </View>
             ) : null}
-            <Notice tone="info">{t('home.payOnlineSoon')}</Notice>
+            {online.data?.length ? (
+              <Button label={t('online.payOnline')} variant="dark" icon="credit-card" onPress={() => { setPayOpen(false); router.push('/payments'); }} />
+            ) : null}
           </View>
         ) : null}
       </Dialog>

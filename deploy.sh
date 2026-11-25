@@ -211,7 +211,7 @@ write_env() {
     printf 'REFRESH_TOKEN_TTL_DAYS=%s\n' "$REFRESH_TOKEN_TTL_DAYS"
     printf 'CORS_ORIGINS=%s\n' "$CORS_ORIGINS"
     printf 'TRUST_PROXY=%s\n\n' "$TRUST_PROXY"
-    printf '# ---- Respaldos (cifra las copias en S3). ¡Guárdala también fuera del servidor! ----\n'
+    printf '# ---- Llave de cifrado: copias de respaldo en S3 y credenciales de pago. ¡Guárdala también fuera del servidor! ----\n'
     printf 'BACKUP_ENCRYPTION_KEY=%s\n\n' "$BACKUP_ENCRYPTION_KEY"
     printf '# ---- Correo (SMTP_HOST vacío = los correos solo se imprimen en el log) ----\n'
     printf 'SMTP_HOST=%s\n' "$SMTP_HOST"
@@ -406,7 +406,7 @@ configure() {
   write_env
   if [ "$NEW_BACKUP_KEY" = 1 ]; then
     say ""
-    warn "Se generó BACKUP_ENCRYPTION_KEY (cifra las copias de respaldo en S3)."
+    warn "Se generó BACKUP_ENCRYPTION_KEY (cifra las copias de respaldo en S3 y las credenciales de PayPal y Mercado Pago)."
     warn "Guárdala en tu gestor de contraseñas: sin ella no se pueden abrir esas copias si pierdes este servidor."
     say  "  Para verla:  grep BACKUP_ENCRYPTION_KEY $ENV_FILE"
   fi

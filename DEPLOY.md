@@ -144,6 +144,24 @@ docker compose -f compose-prd.yaml exec db sh -c \
 gunzip -c backups/ARCHIVO.sql.gz | docker compose -f compose-prd.yaml exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" budodesk'
 ```
 
+## Pagos en línea (PayPal y Mercado Pago)
+
+Cada dojo pone sus propias credenciales en **Ajustes del dojo → Cobro**, y el
+dinero llega directo a su cuenta.
+
+- Las credenciales se guardan cifradas con `BACKUP_ENCRYPTION_KEY`, así que sin
+  esa llave no se pueden activar.
+- **Avisos (webhooks):** la pantalla muestra la dirección que hay que registrar
+  en PayPal Developer y en Mercado Pago. Debe ser pública y con `https`, por
+  ejemplo `https://seikoukan.budodesk.com/api/v2/online-payments/webhooks/...`.
+  Si se pierde un aviso, el pago se confirma igual cuando el alumno regresa a
+  la app.
+- **En local** los avisos no llegan, porque no hay dirección pública. El pago se
+  confirma al regresar a la app; con eso basta para probar con las
+  credenciales de prueba.
+- Empieza siempre en modo **Prueba** (sandbox) y pasa a **Real** cuando todo
+  funcione.
+
 ## Nunca
 
 - `docker compose down -v` en producción: borra el volumen con la base de datos.

@@ -17,6 +17,7 @@ import { t, useLanguage } from '../../i18n';
 import { dateTimeShort, money } from '../../utils/format';
 import { ColorField, isHex } from '../ranks/bits';
 import { dt } from './Announcements';
+import { OnlinePayments } from './OnlinePayments';
 
 type Msg = { tone: 'success' | 'danger'; text: string } | null;
 type TabKey = 'general' | 'look' | 'classes' | 'payments' | 'legal' | 'activity';
@@ -314,11 +315,8 @@ function PaymentsTab() {
           <Field label={dt('f_graceDays')} value={grace} onChangeText={(x) => setGrace(x.replace(/\D/g, ''))} keyboardType="number-pad" hint={dt('f_graceDaysHint')} />
         </FormGrid>
       </Card>
-      <Card style={{ gap: space.xs }}>
-        <Text variant="bodyStrong">{dt('online')}</Text>
-        <Text variant="small" color={palette.ink2}>{dt('onlineSoon')}</Text>
-      </Card>
       <SaveBar busy={busy} msg={msg} onSave={save} />
+      {data.data ? <OnlinePayments settings={data.data} onSaved={(d) => data.setData(d)} /> : null}
     </View>
   );
 }

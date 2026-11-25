@@ -22,6 +22,7 @@ async function hourly() {
     const sessions = await extendAllDojos();
     const [dojos] = await pool.query(`SELECT id, timezone FROM dojos WHERE status IN ('trial','active')`);
     for (const d of dojos) await paymentReminders(d.id, todayIn(d.timezone), { addDays });
+    await require('../modules/online/online.service').expireStale();
     const changed = billing.filter((b) => b.renewed || b.past_due || b.expired || b.activated);
     if (changed.length || sessions) console.log(`[jobs] facturación ${JSON.stringify(changed)} · sesiones nuevas ${sessions}`);
   } catch (e) {
