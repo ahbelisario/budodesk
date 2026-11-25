@@ -11,6 +11,7 @@
 #    ./deploy.sh demo         Cargar datos de ejemplo (solo en dev).
 #    ./deploy.sh status       Ver contenedores y salud del API.
 #    ./deploy.sh logs [svc]   Ver logs (backend, db, gateway, frontend).
+#    ./deploy.sh restore ARCH Restaurar un respaldo descargado del panel (.tar.gz o .tar.gz.enc).
 #    ./deploy.sh stop         Apagar los contenedores (los datos se conservan).
 #
 #  Opciones:  --engine docker|podman   -y | --yes (acepta valores por omisión)
@@ -44,10 +45,10 @@ while [ $# -gt 0 ]; do
     -y|--yes) YES=1 ;;
     --engine) shift; ENGINE="${1-}" ;;
     --engine=*) ENGINE="${1#*=}" ;;
-    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    config|up|admin|demo|status|logs|stop)
+    -h|--help) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    config|up|admin|demo|status|logs|stop|restore)
       [ -z "$CMD" ] || die "Solo un comando a la vez"; CMD="$1"
-      if [ "$1" = logs ] && [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then LOG_SVC="$2"; shift; fi ;;
+      if { [ "$1" = logs ] || [ "$1" = restore ]; } && [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then LOG_SVC="$2"; shift; fi ;;
     *) die "Opción desconocida: $1  (usa --help)" ;;
   esac
   shift
@@ -169,7 +170,7 @@ env_val() {
 
 mask() { local s=$1; [ -n "$s" ] || { printf '(vacío)'; return; }; printf '%s…(%s caracteres)' "${s:0:3}" "${#s}"; }
 
-KNOWN_KEYS="APP_ENV CONTAINER_ENGINE COMPOSE_PROJECT_NAME HTTP_PORT DEFAULT_DOJO_SLUG APP_BASE_URL DB_ROOT_PASSWORD DB_USER DB_PASSWORD DB_NAME JWT_ACCESS_SECRET ACCESS_TOKEN_TTL_MIN REFRESH_TOKEN_TTL_DAYS CORS_ORIGINS TRUST_PROXY SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASS MAIL_FROM BILLING_SCHEDULER"
+KNOWN_KEYS="APP_ENV CONTAINER_ENGINE COMPOSE_PROJECT_NAME HTTP_PORT DEFAULT_DOJO_SLUG APP_BASE_URL DB_ROOT_PASSWORD DB_USER DB_PASSWORD DB_NAME JWT_ACCESS_SECRET BACKUP_ENCRYPTION_KEY ACCESS_TOKEN_TTL_MIN REFRESH_TOKEN_TTL_DAYS CORS_ORIGINS TRUST_PROXY SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASS MAIL_FROM BILLING_SCHEDULER"
 
 write_env() {
   local tmp k extra
@@ -197,6 +198,8 @@ write_env() {
     printf 'REFRESH_TOKEN_TTL_DAYS=%s\n' "$REFRESH_TOKEN_TTL_DAYS"
     printf 'CORS_ORIGINS=%s\n' "$CORS_ORIGINS"
     printf 'TRUST_PROXY=%s\n\n' "$TRUST_PROXY"
+    printf '# ---- Respaldos (cifra las copias en S3). ¡Guárdala también fuera del servidor! ----\n'
+    printf 'BACKUP_ENCRYPTION_KEY=%s\n\n' "$BACKUP_ENCRYPTION_KEY"
     printf '# ---- Correo (SMTP_HOST vacío = los correos solo se imprimen en el log) ----\n'
     printf 'SMTP_HOST=%s\n' "$SMTP_HOST"
     printf 'SMTP_PORT=%s\n' "$SMTP_PORT"
@@ -255,6 +258,7 @@ show_summary() {
   fi
   say "  Tareas automáticas .. $BILLING_SCHEDULER"
   say "  Secretos ............ DB root $(mask "$DB_ROOT_PASSWORD"), DB app $(mask "$DB_PASSWORD"), JWT $(mask "$JWT_ACCESS_SECRET")"
+  say "  Llave de respaldos .. $(mask "${BACKUP_ENCRYPTION_KEY:-}")"
 }
 
 # ---------- motor de contenedores ----------
@@ -367,6 +371,9 @@ configure() {
 
   # Secretos: se conservan si ya existen; si no, se generan
   DB_ROOT_PASSWORD=$(env_get DB_ROOT_PASSWORD); DB_PASSWORD=$(env_get DB_PASSWORD); JWT_ACCESS_SECRET=$(env_get JWT_ACCESS_SECRET)
+  BACKUP_ENCRYPTION_KEY=$(env_get BACKUP_ENCRYPTION_KEY)
+  NEW_BACKUP_KEY=0
+  if [ "${#BACKUP_ENCRYPTION_KEY}" -lt 32 ]; then BACKUP_ENCRYPTION_KEY=$(gen_secret); NEW_BACKUP_KEY=1; fi
   if { [ -z "$DB_ROOT_PASSWORD" ] || [ -z "$DB_PASSWORD" ]; } && volume_exists; then
     warn "Ya existe una base de datos (volumen ${COMPOSE_PROJECT_NAME}_dbdata) pero el .env no tiene sus contraseñas."
     warn "Si genero contraseñas nuevas, el backend no podrá entrar a esa base."
@@ -383,6 +390,12 @@ configure() {
   say ""
   ask_yn "¿Guardar esta configuración?" s || die "Cancelado; no se cambió nada."
   write_env
+  if [ "$NEW_BACKUP_KEY" = 1 ]; then
+    say ""
+    warn "Se generó BACKUP_ENCRYPTION_KEY (cifra las copias de respaldo en S3)."
+    warn "Guárdala en tu gestor de contraseñas: sin ella no se pueden abrir esas copias si pierdes este servidor."
+    say  "  Para verla:  grep BACKUP_ENCRYPTION_KEY $ENV_FILE"
+  fi
   if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     git check-ignore -q "$ENV_FILE" || warn "¡$ENV_FILE NO está en .gitignore! No lo subas a git."
   fi
@@ -465,6 +478,87 @@ deploy() {
   say "  • Nunca uses 'compose down -v': borra la base de datos."
 }
 
+# ---------- restaurar ----------
+restore() {
+  local file=${1:-}
+  [ -n "$file" ] || die "Indica el archivo: ./deploy.sh restore budodesk-AAAA-MM-DD-HHMM.tar.gz"
+  [ -f "$file" ] || die "No encuentro el archivo: $file"
+  command -v tar >/dev/null 2>&1 || die "Falta el comando tar en este servidor"
+  http_ok || die "BudoDesk no está corriendo. Levántalo primero: ./deploy.sh up"
+
+  local work; work=$(mktemp -d "${TMPDIR:-/tmp}/budodesk-restore.XXXXXX")
+  chmod 700 "$work"
+  trap 'rm -rf "$work"' EXIT
+  local tgz="$file"
+
+  step "Revisando el respaldo"
+  case "$file" in
+    *.enc)
+      say "Es una copia cifrada: la descifro con la llave del servidor…"
+      compose exec -T backend node scripts/backup-decrypt.js < "$file" > "$work/respaldo.tar.gz" \
+        || die "No se pudo descifrar. ¿Es la misma BACKUP_ENCRYPTION_KEY con la que se creó?"
+      tgz="$work/respaldo.tar.gz" ;;
+  esac
+  mkdir -p "$work/x"
+  tar -xzf "$tgz" -C "$work/x" || die "El archivo no es un respaldo válido (.tar.gz dañado)"
+  [ -f "$work/x/manifest.json" ] && [ -f "$work/x/budodesk.sql" ] || die "El archivo no es un respaldo de BudoDesk (falta manifest.json o budodesk.sql)"
+  grep -q '"app": "BudoDesk"' "$work/x/manifest.json" || die "El archivo no es un respaldo de BudoDesk"
+  local created rows files
+  created=$(sed -n 's/.*"created_at": "\([^"]*\)".*/\1/p' "$work/x/manifest.json")
+  rows=$(sed -n 's/.*"rows": \([0-9]*\).*/\1/p' "$work/x/manifest.json")
+  files=$(sed -n 's/.*"uploads_files": \([0-9]*\).*/\1/p' "$work/x/manifest.json")
+  say "  Creado .............. ${created:-?} (UTC)"
+  say "  Registros ........... ${rows:-?}"
+  say "  Archivos subidos .... ${files:-0}"
+  say ""
+  warn "Esto REEMPLAZA TODA la base de datos actual ($COMPOSE_PROJECT_NAME, $APP_ENV) por la del respaldo."
+  warn "Antes guardo una copia de lo actual en ./backups/."
+  if [ "$YES" = 1 ]; then die "Por seguridad, restore no acepta --yes: hay que confirmarlo a mano."; fi
+  local answer
+  printf 'Escribe RESTAURAR para continuar: '
+  IFS= read -r answer || answer=""
+  [ "$answer" = RESTAURAR ] || die "Cancelado; no se cambió nada."
+
+  step "Copia de seguridad de lo actual"
+  mkdir -p backups
+  local before
+  before="backups/antes-de-restaurar-$(date +%Y%m%d-%H%M%S).sql.gz"
+  # shellcheck disable=SC2016
+  compose exec -T db sh -c 'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines budodesk' | gzip > "$before"
+  [ -s "$before" ] || die "No se pudo respaldar la base actual; no se cambió nada."
+  chmod 600 "$before"
+  ok "Copia de lo actual: $before"
+
+  step "Restaurando"
+  compose stop backend
+  # shellcheck disable=SC2016
+  local recreate='mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "DROP DATABASE IF EXISTS budodesk; CREATE DATABASE budodesk CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"'
+  # shellcheck disable=SC2016
+  if ! compose exec -T db sh -c "$recreate" \
+     || ! compose exec -T db sh -c 'mysql --default-character-set=utf8mb4 -uroot -p"$MYSQL_ROOT_PASSWORD" budodesk' < "$work/x/budodesk.sql"; then
+    warn "Falló la restauración. Regreso la base a como estaba…"
+    compose exec -T db sh -c "$recreate" || true
+    # shellcheck disable=SC2016
+    gunzip -c "$before" | compose exec -T db sh -c 'mysql --default-character-set=utf8mb4 -uroot -p"$MYSQL_ROOT_PASSWORD" budodesk' \
+      || warn "Tampoco pude regresarla sola: importa $before a mano (ver DEPLOY.md, Restaurar)."
+    compose start backend
+    die "No se restauró el respaldo."
+  fi
+  ok "Base de datos restaurada"
+  compose start backend
+  wait_healthy
+  if [ -d "$work/x/uploads" ]; then
+    if tar -C "$work/x/uploads" -cf - . | compose exec -T backend tar -C /usr/src/app/uploads -xf -; then
+      ok "Archivos subidos restaurados"
+    else
+      warn "No se pudieron restaurar los archivos subidos (logos, fotos)"
+    fi
+  fi
+  rm -rf "$work"; trap - EXIT
+  say ""
+  ok "Listo. Las sesiones abiertas siguen siendo las del respaldo: si algo se ve raro, cierra sesión y vuelve a entrar."
+}
+
 # ---------- main ----------
 case "$CMD" in
   "")
@@ -476,6 +570,7 @@ case "$CMD" in
       SMTP_USER=$(env_get SMTP_USER); SMTP_PORT=$(env_get SMTP_PORT); SMTP_PASS=$(env_get SMTP_PASS)
       BILLING_SCHEDULER=$(env_get BILLING_SCHEDULER)
       DB_ROOT_PASSWORD=$(env_get DB_ROOT_PASSWORD); DB_PASSWORD=$(env_get DB_PASSWORD); JWT_ACCESS_SECRET=$(env_get JWT_ACCESS_SECRET)
+      BACKUP_ENCRYPTION_KEY=$(env_get BACKUP_ENCRYPTION_KEY)
       show_summary; say ""
       if ask_yn "¿Cambiar algo de la configuración antes de desplegar?" n; then configure; fi
     fi
@@ -488,5 +583,6 @@ case "$CMD" in
   demo)   load_env; pick_engine; load_demo ;;
   status) load_env; pick_engine; compose ps; if http_ok; then ok "API responde en el puerto $HTTP_PORT"; else warn "El API no responde en el puerto $HTTP_PORT"; fi ;;
   logs)   load_env; pick_engine; compose logs -f --tail 100 ${LOG_SVC:+"$LOG_SVC"} ;;
+  restore) load_env; pick_engine; restore "$LOG_SVC" ;;
   stop)   load_env; pick_engine; compose down; ok "Contenedores apagados. Los datos siguen en los volúmenes." ;;
 esac

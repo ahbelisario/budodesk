@@ -10,6 +10,7 @@ export type NavItem = {
   roles?: Role[];         // si se omite: cualquiera
   staffOnly?: boolean;
   studentOnly?: boolean;  // vistas de alumno/tutor
+  superadminOnly?: boolean; // panel de la plataforma
 };
 
 /** Menú completo. Cada rol ve lo que le corresponde. */
@@ -24,6 +25,7 @@ export const NAV: NavItem[] = [
   { key: 'progress', href: '/progress', label: 'nav.progress', icon: 'trending-up', studentOnly: true },
   { key: 'payments', href: '/payments', label: 'nav.payments', icon: 'credit-card', studentOnly: true },
   { key: 'settings', href: '/settings', label: 'nav.settings', icon: 'settings', roles: ['owner', 'admin'] },
+  { key: 'platform', href: '/platform', label: 'nav.platform', icon: 'server', superadminOnly: true },
   { key: 'profile', href: '/profile', label: 'nav.profile', icon: 'user' },
 ];
 
@@ -31,9 +33,10 @@ export const NAV: NavItem[] = [
 const STAFF_TABS = ['home', 'members', 'classes', 'billing'];
 const STUDENT_TABS = ['home', 'classes', 'progress', 'payments', 'profile'];
 
-export function navFor(roles: Role[]) {
+export function navFor(roles: Role[], isSuperadmin = false) {
   const staff = roles.some((r) => ['owner', 'admin', 'staff', 'instructor'].includes(r));
   const visible = NAV.filter((n) => {
+    if (n.superadminOnly) return isSuperadmin;
     if (n.studentOnly) return !staff || roles.includes('student') || roles.includes('guardian');
     if (n.roles) return n.roles.some((r) => roles.includes(r));
     return true;

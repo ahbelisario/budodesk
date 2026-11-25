@@ -3,6 +3,7 @@ import { classesEs } from './classes';
 import { billingEs } from './billing';
 import { ranksEs } from './ranks';
 import { dojoEs } from './dojo';
+import { platformEs } from './platform';
 export const es = {
   common: {
     loading: 'Cargando…',
@@ -58,6 +59,7 @@ export const es = {
     classes: 'Clases',
     schedule: 'Clases y asistencia',
     ranks: 'Grados y exámenes',
+    platform: 'Plataforma',
     memberships: 'Membresías',
     billing: 'Cobranza',
     announcements: 'Avisos',
@@ -172,6 +174,7 @@ export const es = {
     status_cancelled: 'Cancelada', status_expired: 'Vencida',
   },
   dojo: dojoEs,
+  platform: platformEs,
   ranks: ranksEs,
   billing: billingEs,
   classes: classesEs,

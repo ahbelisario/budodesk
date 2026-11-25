@@ -32,6 +32,15 @@ async function listUserDojos(executor, userId) {
   return rows.map((d) => ({ ...d, roles: expandRoles(d.roles.split(',')) }));
 }
 
+/** Dojo en modo soporte (superadmin que no es miembro): permisos de dueño */
+async function supportDojo(executor, dojoId) {
+  if (!dojoId) return null;
+  const d = await one(executor,
+    `SELECT id, slug, name, short_name, logo_url, color_primary, color_secondary, color_accent, status
+       FROM dojos WHERE id = :id`, { id: dojoId });
+  return d ? { ...d, roles: expandRoles(['owner']), support: true } : null;
+}
+
 async function getUserSummary(executor, userId) {
   return one(executor,
     `SELECT u.id, u.email, u.username, u.is_superadmin, u.email_verified_at,
@@ -178,7 +187,7 @@ async function refresh({ refreshToken, ip, userAgent }) {
   const outcome = await withTransaction(async (conn) => {
     const s = await one(conn,
       `SELECT s.id, s.user_id, s.dojo_id, s.family_id, s.revoked_at, (s.expires_at < NOW()) AS expired,
-              u.status, u.deleted_at
+              u.status, u.deleted_at, u.is_superadmin
          FROM auth_sessions s JOIN users u ON u.id = s.user_id
         WHERE s.refresh_token_hash = :hash
         FOR UPDATE`,
@@ -200,7 +209,8 @@ async function refresh({ refreshToken, ip, userAgent }) {
 
     // ¿Sigue siendo miembro activo del dojo de la sesión?
     const dojos = await listUserDojos(conn, s.user_id);
-    const dojo = dojos.find((d) => d.id === s.dojo_id) ?? null;
+    let dojo = dojos.find((d) => d.id === s.dojo_id) ?? null;
+    if (!dojo && s.is_superadmin) dojo = await supportDojo(conn, s.dojo_id);
 
     const tokens = await createSession(conn, {
       userId: s.user_id, dojoId: dojo?.id, familyId: s.family_id, ip, userAgent,
@@ -215,14 +225,15 @@ async function refresh({ refreshToken, ip, userAgent }) {
 }
 
 /** Cambia el dojo activo de la sesión actual y emite un access token nuevo. */
-async function switchDojo({ userId, sessionId, dojoId }) {
+async function switchDojo({ userId, sessionId, dojoId, isSuperadmin = false }) {
   const dojos = await listUserDojos(pool, userId);
-  const dojo = dojos.find((d) => d.id === dojoId);
+  let dojo = dojos.find((d) => d.id === dojoId);
+  if (!dojo && isSuperadmin) dojo = await supportDojo(pool, dojoId);
   if (!dojo) throw forbidden('No perteneces a ese dojo', 'NOT_A_MEMBER');
 
   await pool.query(`UPDATE auth_sessions SET dojo_id = :dojoId WHERE id = :sid AND user_id = :uid`,
     { dojoId, sid: sessionId, uid: userId });
-  await rememberDojo(pool, userId, dojoId);
+  if (!dojo.support) await rememberDojo(pool, userId, dojoId);
 
   const access = signAccessToken({ userId, sessionId, dojoId });
   return { access_token: access.token, access_token_expires_at: access.expiresAt, dojo };
@@ -238,10 +249,11 @@ async function logoutAll({ userId }) {
     { uid: userId });
 }
 
-async function me({ userId, dojoId, roles }) {
+async function me({ userId, dojoId, roles, support }) {
   const summary = await getUserSummary(pool, userId);
   const dojos = await listUserDojos(pool, userId);
-  const dojo = dojos.find((d) => d.id === dojoId) ?? null;
+  let dojo = dojos.find((d) => d.id === dojoId) ?? null;
+  if (!dojo && support) dojo = await supportDojo(pool, dojoId);
   return { user: publicUser(summary), dojo: dojo ? { ...dojo, roles } : null, dojos };
 }
 

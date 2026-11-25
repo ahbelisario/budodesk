@@ -53,6 +53,7 @@ function createApp() {
   app.use('/api/v2/dashboard', require('./modules/dashboard/dashboard.routes'));
   app.use('/api/v2/notifications', notifications);
   app.use('/api/v2/announcements', announcements);
+  app.use('/api/v2/platform', require('./modules/platform/platform.routes'));
 
   registerEventHandlers(app);
 

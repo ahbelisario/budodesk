@@ -50,6 +50,7 @@ router.post('/refresh', refreshLimiter, validate({ body: refreshSchema }), async
 router.post('/switch-dojo', authenticate, validate({ body: switchSchema }), async (req, res) => {
   const data = await service.switchDojo({
     userId: req.auth.userId, sessionId: req.auth.sessionId, dojoId: req.valid.body.dojo_id,
+    isSuperadmin: req.auth.isSuperadmin,
   });
   res.json({ status: 'success', data });
 });

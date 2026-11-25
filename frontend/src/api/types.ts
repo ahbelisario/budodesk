@@ -13,6 +13,9 @@ export type DojoSummary = {
   color_secondary: string | null;
   color_accent: string | null;
   roles: Role[];
+  /** Superadmin dentro de un dojo del que no es miembro */
+  support?: boolean;
+  status?: string;
 };
 
 export type User = {

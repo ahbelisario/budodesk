@@ -39,6 +39,7 @@ contraseñas existentes y se guarda una copia `.env.bak-FECHA`.
 | `./deploy.sh status` | Contenedores y salud del API |
 | `./deploy.sh logs [backend\|db\|gateway\|frontend]` | Logs en vivo |
 | `./deploy.sh stop` | Apaga los contenedores (los datos se conservan) |
+| `./deploy.sh restore ARCHIVO` | Restaura un respaldo descargado del panel (`.tar.gz` o la copia cifrada `.enc`) |
 
 Opciones: `--engine docker|podman` para forzar el motor y `--yes` para aceptar
 los valores por omisión sin preguntar.
@@ -90,21 +91,58 @@ git pull
 ```
 
 Los datos no se tocan: el esquema solo se carga cuando el volumen está vacío.
+Las tablas nuevas de la plataforma (respaldos) el backend las crea solo al arrancar si faltan.
 Cambios futuros de esquema llegarán como archivos de migración.
 
 ## Respaldos
 
+Se configuran desde la app: **Plataforma → Respaldos**. Solo aparece para el
+superadmin (`./deploy.sh admin` con «superadmin»).
+
+- **Automáticos:** diario o semanal, a la hora que elijas. Se guardan de 1 a 10
+  en el servidor (volumen `appbackups`) y se van ciclando. Se descargan desde
+  el panel con un enlace que vence en 5 minutos.
+- **Qué incluyen:** toda la base de datos (todos los dojos) y los archivos
+  subidos (logos y fotos), en un `budodesk-AAAA-MM-DD-HHMM.tar.gz`.
+- **Copia en S3 (opcional):** AWS, Backblaze B2, Cloudflare R2, Wasabi o
+  MinIO, con su propio número de copias a guardar.
+  - Van **cifradas** con `BACKUP_ENCRYPTION_KEY`, que `./deploy.sh config`
+    genera sola.
+  - **Guarda esa llave fuera del servidor** (gestor de contraseñas). Sin ella,
+    las copias de S3 no se pueden abrir.
+- **Si un respaldo falla,** llega un correo a los superadmins.
+
+### Restaurar
+
+Restaurar reemplaza **toda** la base actual. Se hace desde la consola del
+servidor, nunca desde la app:
+
 ```bash
-# Respaldo (queda en ./backups, que no se sube a git)
+# 1. Descarga el respaldo desde el panel y cópialo al servidor
+scp budodesk-2026-11-25-0300.tar.gz usuario@servidor:~/budodesk/
+# 2. En la carpeta del repo
+./deploy.sh restore budodesk-2026-11-25-0300.tar.gz
+```
+
+El script hace esto:
+
+1. Revisa que el archivo sea un respaldo de BudoDesk.
+2. Pide escribir `RESTAURAR`.
+3. Guarda lo actual en `./backups/antes-de-restaurar-FECHA.sql.gz`.
+4. Reemplaza la base y los archivos subidos, y reinicia el backend.
+
+Si la importación falla, regresa la base a como estaba. Con la copia de S3
+(`.tar.gz.enc`) es el mismo comando: la descifra con la llave del servidor.
+
+### Respaldo manual por consola (sin la app)
+
+```bash
 docker compose -f compose-prd.yaml exec db sh -c \
   'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines budodesk | gzip > /backups/budodesk-$(date +%F-%H%M).sql.gz'
 
-# Restaurar
+# Restaurar un .sql.gz hecho así
 gunzip -c backups/ARCHIVO.sql.gz | docker compose -f compose-prd.yaml exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" budodesk'
 ```
-
-Recomendado: el respaldo en un cron diario del servidor, copiando `./backups`
-fuera de la VM (otro disco o Proxmox Backup Server).
 
 ## Nunca
 

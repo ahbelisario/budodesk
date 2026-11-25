@@ -64,9 +64,9 @@ function Sidebar() {
   const { dojo, dojos, user, roles, logout } = useSession();
   const router = useRouter();
   const pathname = usePathname();
-  const { main } = navFor(roles);
-  const top = main.filter((n) => n.key !== 'settings');
-  const settings = main.find((n) => n.key === 'settings');
+  const { main } = navFor(roles, !!user?.is_superadmin);
+  const top = main.filter((n) => n.key !== 'settings' && n.key !== 'platform');
+  const bottom = main.filter((n) => n.key === 'settings' || n.key === 'platform');
   const mainRole = roles.includes('owner') ? 'owner' : roles.includes('admin') ? 'admin' : roles[0];
 
   return (
@@ -75,7 +75,7 @@ function Sidebar() {
         <DojoMark />
         <View style={{ flex: 1 }}>
           <Text variant="bodyStrong" color="#FFFFFF" numberOfLines={1} style={{ fontFamily: fonts.display, fontSize: 16 }}>{dojo?.short_name || dojo?.name}</Text>
-          {dojos.length > 1 ? (
+          {dojos.length > 1 || dojo?.support ? (
             <Pressable accessibilityRole="button" onPress={() => router.push('/choose-dojo')}>
               <Text variant="caption" color={palette.mutedOnDark}>{t('nav.switchDojo')}</Text>
             </Pressable>
@@ -88,7 +88,9 @@ function Sidebar() {
         ))}
       </ScrollView>
       <View style={{ borderTopWidth: 1, borderTopColor: palette.darkLine, paddingTop: space.md, gap: 2 }}>
-        {settings ? <SidebarItem item={settings} active={isActive(pathname, settings.href)} onPress={() => router.push(settings.href as any)} /> : null}
+        {bottom.map((item) => (
+          <SidebarItem key={item.key} item={item} active={isActive(pathname, item.href)} onPress={() => router.push(item.href as any)} />
+        ))}
         <Pressable accessibilityRole="link" onPress={() => router.push('/profile')}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10 }}>
           <Avatar name={user ? fullName(user) : '?'} photoUrl={user?.photo_url} size={32} />
@@ -106,12 +108,12 @@ function Sidebar() {
 }
 
 function TabBar() {
-  const { roles } = useSession();
+  const { roles, user } = useSession();
   const { accent } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { tabs, more, staff } = navFor(roles);
+  const { tabs, more, staff } = navFor(roles, !!user?.is_superadmin);
   const items: NavItem[] = staff ? [...tabs, { key: 'more', href: '/more', label: 'Más', icon: 'menu' }] : tabs;
   const moreActive = staff && more.some((m) => isActive(pathname, m.href));
 
@@ -138,6 +140,36 @@ function TabBar() {
   );
 }
 
+/** Aviso fijo arriba cuando el superadmin está dentro de un dojo en modo soporte */
+function SupportBanner() {
+  const { dojo, dojos, switchDojo } = useSession();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [busy, setBusy] = React.useState(false);
+  if (!dojo?.support) return null;
+  const home = dojos[0];
+  async function exit() {
+    if (!home) { router.replace('/platform'); return; }
+    setBusy(true);
+    try { await switchDojo(home.id); router.replace('/platform'); } finally { setBusy(false); }
+  }
+  return (
+    <View accessibilityRole="alert" style={{
+      flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap',
+      backgroundColor: palette.ink, paddingHorizontal: space.lg, paddingVertical: space.sm, paddingTop: space.sm + insets.top,
+    }}>
+      <Icon name="tool" size={16} color="#F5C451" />
+      <Text variant="small" color="#FFFFFF" style={{ flex: 1, minWidth: 180 }}>{t('platform.supportBanner', { dojo: dojo.short_name || dojo.name })}</Text>
+      {home ? (
+        <Pressable accessibilityRole="button" onPress={exit} disabled={busy} hitSlop={6}
+          style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: '#5A5852' }}>
+          <Text variant="smallStrong" color="#FFFFFF">{t('platform.supportExit')}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { width } = useWindowDimensions();
   const wide = width >= WIDE_BREAKPOINT;
@@ -145,12 +177,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <View style={{ flex: 1, flexDirection: 'row', backgroundColor: palette.paper }}>
         <Sidebar />
-        <View style={{ flex: 1 }}>{children}</View>
+        <View style={{ flex: 1 }}>
+          <SupportBanner />
+          {children}
+        </View>
       </View>
     );
   }
   return (
     <View style={{ flex: 1, backgroundColor: palette.paper }}>
+      <SupportBanner />
       <View style={{ flex: 1 }}>{children}</View>
       <TabBar />
     </View>

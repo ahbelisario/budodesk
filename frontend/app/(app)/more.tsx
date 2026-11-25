@@ -10,9 +10,9 @@ import { t } from '@/i18n';
 
 /** Secciones que no caben en las pestañas del celular */
 export default function More() {
-  const { roles, logout, dojos } = useSession();
+  const { roles, logout, dojos, user } = useSession();
   const router = useRouter();
-  const { more } = navFor(roles);
+  const { more } = navFor(roles, !!user?.is_superadmin);
   const rows = [
     ...more.map((m) => ({ key: m.key, label: t(m.label), icon: m.icon, onPress: () => router.push(m.href as any) })),
     ...(dojos.length > 1 ? [{ key: 'switch', label: t('nav.switchDojo'), icon: 'repeat' as const, onPress: () => router.push('/choose-dojo') }] : []),

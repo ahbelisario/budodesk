@@ -36,6 +36,12 @@ const schema = z.object({
 
   // Carpeta de archivos subidos (logos, fotos, comprobantes). En Docker: volumen.
   UPLOAD_DIR: z.string().default('uploads'),
+  // Respaldos de la plataforma (panel del superadmin). En Docker: volumen.
+  BACKUP_DIR: z.string().default('backups'),
+  // Cifra las copias en S3 y las llaves guardadas. Sin ella, S3 queda desactivado.
+  // ¡Guárdala también fuera del servidor! Sin ella no se pueden abrir las copias de S3.
+  BACKUP_ENCRYPTION_KEY: z.string().min(32, 'BACKUP_ENCRYPTION_KEY debe tener al menos 32 caracteres').optional()
+    .or(z.literal('').transform(() => undefined)),
   // Ejecuta la facturación diaria dentro del proceso (desactívalo si usas cron externo)
   BILLING_SCHEDULER: z.stringbool().default(true),
 

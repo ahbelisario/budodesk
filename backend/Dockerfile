@@ -16,7 +16,7 @@ COPY --chown=node:node src ./src
 COPY --chown=node:node scripts ./scripts
 
 # Carpeta de archivos subidos (montada como volumen) y usuario sin privilegios
-RUN mkdir -p uploads && chown -R node:node uploads
+RUN mkdir -p uploads backups && chown -R node:node uploads backups && chmod 700 backups
 USER node
 
 ENV NODE_ENV=production PORT=3000 UPLOAD_DIR=/usr/src/app/uploads

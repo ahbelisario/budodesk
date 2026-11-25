@@ -4,6 +4,7 @@ import { classesEn } from './classes';
 import { billingEn } from './billing';
 import { ranksEn } from './ranks';
 import { dojoEn } from './dojo';
+import { platformEn } from './platform';
 
 type Shape<T> = { [K in keyof T]: T[K] extends string ? string : Shape<T[K]> };
 
@@ -62,6 +63,7 @@ export const en: Shape<typeof es> = {
     classes: 'Classes',
     schedule: 'Classes & attendance',
     ranks: 'Ranks & exams',
+    platform: 'Platform',
     memberships: 'Memberships',
     billing: 'Billing',
     announcements: 'Announcements',
@@ -176,6 +178,7 @@ export const en: Shape<typeof es> = {
     status_cancelled: 'Cancelled', status_expired: 'Expired',
   },
   dojo: dojoEn,
+  platform: platformEn,
   ranks: ranksEn,
   billing: billingEn,
   classes: classesEn,

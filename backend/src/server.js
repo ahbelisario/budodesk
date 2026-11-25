@@ -5,12 +5,16 @@ const { createApp } = require('./app');
 async function main() {
   // Falla rápido si la BD no responde
   await pool.query('SELECT 1');
+  // Tablas de la plataforma (respaldos): se crean si faltan, nunca se modifican
+  await require('./db/platformTables').ensurePlatformTables();
 
   const app = createApp();
   const server = app.listen(env.PORT, () => {
     console.log(`BudoDesk API v2 escuchando en :${env.PORT} (${env.NODE_ENV})`);
   });
   if (env.BILLING_SCHEDULER) require('./jobs/scheduler').start();
+  // Respaldos programados: igual que la facturación, solo en una réplica
+  if (env.BILLING_SCHEDULER) require('./modules/platform/backups.service').startScheduler();
 
   const shutdown = (signal) => {
     console.log(`${signal} recibido, cerrando…`);

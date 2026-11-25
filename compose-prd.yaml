@@ -30,8 +30,10 @@ services:
       DB_HOST: db
       DB_PORT: 3306
       UPLOAD_DIR: /usr/src/app/uploads
+      BACKUP_DIR: /usr/src/app/backups
     volumes:
       - uploads:/usr/src/app/uploads
+      - appbackups:/usr/src/app/backups   # respaldos del panel de Plataforma
     depends_on:
       db:
         condition: service_healthy
@@ -67,3 +69,4 @@ networks:
 volumes:
   dbdata: {}     # ¡los datos viven aquí! `docker compose down -v` los BORRA
   uploads: {}
+  appbackups: {} # respaldos automáticos (se descargan desde Plataforma → Respaldos)

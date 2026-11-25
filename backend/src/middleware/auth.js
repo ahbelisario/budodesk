@@ -21,7 +21,8 @@ function expandRoles(roles) {
  * usuario o quitarle un rol surte efecto de inmediato, sin esperar a que
  * expire el token.
  *
- * Deja en req.auth: { userId, sessionId, dojoId, roles, isSuperadmin }
+ * Deja en req.auth: { userId, sessionId, dojoId, roles, isSuperadmin, support }
+ * support = superadmin dentro de un dojo del que no es miembro (permisos de dueño).
  */
 async function authenticate(req, _res, next) {
   const header = req.headers.authorization || '';
@@ -52,6 +53,7 @@ async function authenticate(req, _res, next) {
   }
 
   let roles = [];
+  let support = false;
   if (claims.dojoId) {
     const [rows] = await pool.query(
       `SELECT r.role
@@ -61,10 +63,15 @@ async function authenticate(req, _res, next) {
         WHERE r.dojo_id = :dojoId AND r.user_id = :uid
           AND m.status = 'active' AND d.status IN ('trial','active')`,
       { dojoId: claims.dojoId, uid: claims.userId });
-    if (rows.length === 0) {
+    if (rows.length > 0) {
+      roles = expandRoles(rows.map((r) => r.role));
+    } else if (session.is_superadmin && await one(pool, 'SELECT id FROM dojos WHERE id = :id', { id: claims.dojoId })) {
+      // Modo soporte: el superadmin entra a un dojo donde no es miembro (o que está suspendido)
+      roles = expandRoles(['owner']);
+      support = true;
+    } else {
       return next(forbidden('Ya no tienes acceso a este dojo', 'NOT_A_MEMBER'));
     }
-    roles = expandRoles(rows.map((r) => r.role));
   }
 
   req.auth = {
@@ -73,6 +80,7 @@ async function authenticate(req, _res, next) {
     dojoId: claims.dojoId,
     roles,
     isSuperadmin: !!session.is_superadmin,
+    support,
   };
 
   // "Última actividad", como máximo una escritura cada 5 min por usuario
