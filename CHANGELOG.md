@@ -7,6 +7,10 @@ Formato: `MAYOR.MENOR.PARCHE`.
 
 Cada versión se crea con `./release.sh` y queda marcada en git como `vX.Y.Z`.
 
+## [1.0.20] - 2026-11-26
+
+- Grados: corregir el historial (fechas, certificados, grados anteriores)
+
 ## [1.0.19] - 2026-11-26
 
 - Planes editables en Plataforma, excepciones por dojo y uso en las tarjetas
