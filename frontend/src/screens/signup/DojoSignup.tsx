@@ -102,10 +102,19 @@ export function DojoSignupScreen() {
   else if (slug.status && !slug.status.available) slugError = st(`slug_${slug.status.reason ?? 'taken'}`);
   else if (v.slug) slugHint = st('f_slugHint', { url: host });
 
-  const complete = v.dojo_name.trim().length >= 2 && SLUG_RE.test(v.slug) && v.first_name.trim() && v.email.includes('@') && v.consent;
+  // Lo que falta, en palabras (el botón no se deshabilita: al presionarlo dice qué completar)
+  const missing = [
+    v.dojo_name.trim().length < 2 && st('f_dojoName'),
+    !SLUG_RE.test(v.slug) && st('f_slug'),
+    !v.first_name.trim() && st('f_firstName'),
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim()) && st('f_email'),
+    !v.consent && st('consentShort'),
+  ].filter(Boolean) as string[];
+  const [tried, setTried] = useState(false);
 
   async function submit() {
-    if (!complete) { setError(st('required')); return; }
+    setTried(true);
+    if (missing.length) { setError(st('missing', { fields: missing.join(', ') })); return; }
     if (slug.status && !slug.status.available) { setError(slugError); return; }
     setBusy(true); setError(null);
     try {
@@ -188,9 +197,11 @@ export function DojoSignupScreen() {
         <Field label="Website" value={v.website} onChangeText={set('website')} tabIndex={-1} autoComplete="off" />
       </View>
 
-      <SwitchRow label={st('consent')} value={v.consent} onChange={set('consent')} />
+      <View style={tried && !v.consent ? { borderWidth: 1, borderColor: palette.danger, borderRadius: 12, padding: 8 } : undefined}>
+        <SwitchRow label={`${st('consent')} *`} value={v.consent} onChange={(x) => { set('consent')(x); if (error) setError(null); }} />
+      </View>
       {error ? <Notice tone="danger">{error}</Notice> : null}
-      <Button label={st('submit')} onPress={submit} loading={busy} disabled={!complete} fullWidth />
+      <Button label={st('submit')} onPress={submit} loading={busy} fullWidth />
       <SignInLink />
     </>,
   );
