@@ -7,6 +7,10 @@ Formato: `MAYOR.MENOR.PARCHE`.
 
 Cada versión se crea con `./release.sh` y queda marcada en git como `vX.Y.Z`.
 
+## [1.0.19] - 2026-11-26
+
+- Planes editables en Plataforma, excepciones por dojo y uso en las tarjetas
+
 ## [1.0.18] - 2026-11-26
 
 - Límites por plan: Básico (50 alumnos, 1 sede, sin finanzas) y Pro
