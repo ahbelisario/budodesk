@@ -5,8 +5,9 @@ const { createApp } = require('./app');
 async function main() {
   // Falla rápido si la BD no responde
   await pool.query('SELECT 1');
-  // Tablas de la plataforma (respaldos): se crean si faltan, nunca se modifican
-  await require('./db/platformTables').ensurePlatformTables();
+  // Migraciones de esquema pendientes (respaldo previo, en orden, con candado).
+  // Si una falla, el servidor no arranca: mejor detenido que con el esquema a medias.
+  await require('./db/migrate').migrate();
 
   const app = createApp();
   const server = app.listen(env.PORT, () => {

@@ -34,6 +34,12 @@ async function resetDatabase() {
   await conn.query(`DROP DATABASE IF EXISTS \`${DB_NAME}\``);
   await conn.query(rename(fs.readFileSync(path.join(SCHEMA_DIR, '01-schema.sql'), 'utf8')));
   await conn.query(rename(fs.readFileSync(path.join(SCHEMA_DIR, '02-seed.sql'), 'utf8')));
+  // Igual que en un servidor nuevo: esquema base (1.0.8) + migraciones
+  await require('../src/db/migrate').migrate({
+    backup: false, quiet: true,
+    db: { host: process.env.DB_HOST, port: Number(process.env.DB_PORT), user: process.env.DB_USER, password: process.env.DB_PASSWORD,
+      database: DB_NAME, socketPath: process.env.TEST_DB_SOCKET },
+  });
 
   const hash = await bcrypt.hash(PASSWORD, 4); // rondas bajas: solo pruebas
   await conn.query(`USE \`${DB_NAME}\`;

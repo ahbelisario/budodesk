@@ -2,6 +2,10 @@
 -- BudoDesk — Esquema v2 (multi-dojo)
 -- MySQL 8.0+ / utf8mb4
 --
+-- LÍNEA BASE 1.0.8 — NO SE MODIFICA.
+-- Los cambios de esquema van en backend/migrations/ (NNNN_descripcion.sql o .js);
+-- el backend los aplica solo al arrancar. Ver backend/migrations/README.md.
+--
 -- Principios:
 --   1. Un solo despliegue, muchos dojos. Toda tabla de negocio lleva dojo_id.
 --   2. Aislamiento reforzado en la BD: las relaciones entre tablas de un dojo

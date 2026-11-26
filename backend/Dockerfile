@@ -14,6 +14,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --chown=node:node src ./src
 COPY --chown=node:node scripts ./scripts
+COPY --chown=node:node migrations ./migrations
 
 # Carpeta de archivos subidos (montada como volumen) y usuario sin privilegios
 RUN mkdir -p uploads backups && chown -R node:node uploads backups && chmod 700 backups

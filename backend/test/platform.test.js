@@ -26,7 +26,7 @@ before(async () => {
   request = require('supertest');
   ({ pool } = require('../src/db/pool'));
   ({ outbox } = require('../src/services/mailer'));
-  await require('../src/db/platformTables').ensurePlatformTables(); // idempotente aunque ya existan
+  await require('../src/db/migrate').migrate({ backup: false, quiet: true }); // la 0001 no cambia nada sobre el esquema base
   backups = require('../src/modules/platform/backups.service');
   app = require('../src/app').createApp();
   await pool.query('UPDATE users SET is_superadmin = 1 WHERE id = 1');

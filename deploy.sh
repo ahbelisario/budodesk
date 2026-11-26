@@ -11,7 +11,9 @@
 #    ./deploy.sh demo         Cargar datos de ejemplo (solo en dev).
 #    ./deploy.sh status       Ver contenedores y salud del API.
 #    ./deploy.sh logs [svc]   Ver logs (backend, db, gateway, frontend).
-#    ./deploy.sh restore ARCH Restaurar un respaldo descargado del panel (.tar.gz o .tar.gz.enc).
+#    ./deploy.sh restore ARCH Restaurar un respaldo descargado del panel (.tar.gz o .tar.gz.enc)
+#                             o el automático de antes de una migración (antes-de-migrar-*.sql.gz).
+#    ./deploy.sh migrations   Ver migraciones aplicadas/pendientes y los respaldos previos.
 #    ./deploy.sh stop         Apagar los contenedores (los datos se conservan).
 #
 #  Opciones:  --engine docker|podman   -y | --yes (acepta valores por omisión)
@@ -427,6 +429,8 @@ wait_healthy() {
   warn "El API no respondió en 3 minutos. Estado y últimos logs:"
   compose ps || true
   compose logs --tail 40 db backend || true
+  say "Si los logs dicen «La migración … falló»: esa migración no se registró y se reintenta al volver a"
+  say "desplegar; antes de aplicarla se guardó un respaldo de la base (./deploy.sh migrations lo lista)."
   die "Revisa los logs de arriba. Cuando lo corrijas: ./deploy.sh up"
 }
 
@@ -506,6 +510,17 @@ deploy() {
 restore() {
   local file=${1:-}
   [ -n "$file" ] || die "Indica el archivo: ./deploy.sh restore budodesk-AAAA-MM-DD-HHMM.tar.gz"
+  # El respaldo automático de antes de migrar vive dentro del contenedor del backend: se trae aquí
+  if [ ! -f "$file" ] && [[ "$(basename "$file")" == antes-de-migrar-*.sql.gz ]]; then
+    mkdir -p backups
+    if compose exec -T backend cat "/usr/src/app/backups/$(basename "$file")" > "backups/$(basename "$file")" 2>/dev/null \
+       && [ -s "backups/$(basename "$file")" ]; then
+      chmod 600 "backups/$(basename "$file")"; file="backups/$(basename "$file")"
+      ok "Copié $(basename "$file") del contenedor a ./backups/"
+    else
+      rm -f "backups/$(basename "$file")"
+    fi
+  fi
   [ -f "$file" ] || die "No encuentro el archivo: $file"
   command -v tar >/dev/null 2>&1 || die "Falta el comando tar en este servidor"
   http_ok || die "BudoDesk no está corriendo. Levántalo primero: ./deploy.sh up"
@@ -524,16 +539,29 @@ restore() {
       tgz="$work/respaldo.tar.gz" ;;
   esac
   mkdir -p "$work/x"
-  tar -xzf "$tgz" -C "$work/x" || die "El archivo no es un respaldo válido (.tar.gz dañado)"
-  [ -f "$work/x/manifest.json" ] && [ -f "$work/x/budodesk.sql" ] || die "El archivo no es un respaldo de BudoDesk (falta manifest.json o budodesk.sql)"
-  grep -q '"app": "BudoDesk"' "$work/x/manifest.json" || die "El archivo no es un respaldo de BudoDesk"
-  local created rows files
-  created=$(sed -n 's/.*"created_at": "\([^"]*\)".*/\1/p' "$work/x/manifest.json")
-  rows=$(sed -n 's/.*"rows": \([0-9]*\).*/\1/p' "$work/x/manifest.json")
-  files=$(sed -n 's/.*"uploads_files": \([0-9]*\).*/\1/p' "$work/x/manifest.json")
-  say "  Creado .............. ${created:-?} (UTC)"
-  say "  Registros ........... ${rows:-?}"
-  say "  Archivos subidos .... ${files:-0}"
+  case "$file" in
+    *.sql.gz)
+      # Respaldo de antes de una migración: solo la base (no toca logos ni fotos)
+      gunzip -c "$file" > "$work/x/budodesk.sql" 2>/dev/null || die "El archivo no es un .sql.gz válido"
+      grep -q 'CREATE TABLE `dojos`' "$work/x/budodesk.sql" || die "El archivo no es un respaldo de la base de BudoDesk"
+      say "  Respaldo de la base de antes de una migración: $(basename "$file")"
+      say "  Solo la base de datos: los archivos subidos no se tocan."
+      warn "Si regresas a una versión anterior, primero despliega ese código (git checkout vX.Y.Z && ./deploy.sh up);"
+      warn "si no, al arrancar el backend vuelve a aplicar la migración."
+      ;;
+    *)
+      tar -xzf "$tgz" -C "$work/x" || die "El archivo no es un respaldo válido (.tar.gz dañado)"
+      [ -f "$work/x/manifest.json" ] && [ -f "$work/x/budodesk.sql" ] || die "El archivo no es un respaldo de BudoDesk (falta manifest.json o budodesk.sql)"
+      grep -q '"app": "BudoDesk"' "$work/x/manifest.json" || die "El archivo no es un respaldo de BudoDesk"
+      local created rows files
+      created=$(sed -n 's/.*"created_at": "\([^"]*\)".*/\1/p' "$work/x/manifest.json")
+      rows=$(sed -n 's/.*"rows": \([0-9]*\).*/\1/p' "$work/x/manifest.json")
+      files=$(sed -n 's/.*"uploads_files": \([0-9]*\).*/\1/p' "$work/x/manifest.json")
+      say "  Creado .............. ${created:-?} (UTC)"
+      say "  Registros ........... ${rows:-?}"
+      say "  Archivos subidos .... ${files:-0}"
+      ;;
+  esac
   say ""
   warn "Esto REEMPLAZA TODA la base de datos actual ($COMPOSE_PROJECT_NAME, $APP_ENV) por la del respaldo."
   warn "Antes guardo una copia de lo actual en ./backups/."
@@ -607,6 +635,12 @@ case "$CMD" in
   demo)   load_env; pick_engine; load_demo ;;
   status) load_env; pick_engine; say "Código: BudoDesk $(app_version) ($(git describe --tags --always 2>/dev/null || echo 'sin git'))"; compose ps; if http_ok; then ok "API responde en el puerto $HTTP_PORT"; else warn "El API no responde en el puerto $HTTP_PORT"; fi ;;
   logs)   load_env; pick_engine; compose logs -f --tail 100 ${LOG_SVC:+"$LOG_SVC"} ;;
+  migrations)
+    load_env; pick_engine
+    compose exec -T backend node scripts/migrate.js status || die "No pude consultar el backend. ¿Está corriendo? (./deploy.sh status)"
+    say ""; say "Respaldos automáticos de antes de migrar (se guardan los últimos 5):"
+    compose exec -T backend sh -c 'ls -1t /usr/src/app/backups/antes-de-migrar-*.sql.gz 2>/dev/null | xargs -r -n1 basename' || true
+    say "Para regresar la base a uno de ellos: ./deploy.sh restore NOMBRE.sql.gz" ;;
   restore) load_env; pick_engine; restore "$LOG_SVC" ;;
   stop)   load_env; pick_engine; compose down; ok "Contenedores apagados. Los datos siguen en los volúmenes." ;;
 esac

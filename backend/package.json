@@ -12,7 +12,10 @@
     "start:legacy": "node backend.js",
     "dev": "node --watch src/server.js",
     "test": "node --test --test-concurrency=1 test/*.test.js",
-    "create-admin": "node scripts/create-admin.js"
+    "create-admin": "node scripts/create-admin.js",
+    "migrate": "node scripts/migrate.js up",
+    "migrate:status": "node scripts/migrate.js status",
+    "migration": "node scripts/new-migration.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1177.0",

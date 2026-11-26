@@ -94,9 +94,25 @@ git pull
 En la app, Perfil → Cuenta muestra «BudoDesk X.Y.Z»; si el servidor tiene otra versión, lo dice
 (por ejemplo, si el navegador guardó una versión vieja de la página).
 
-Los datos no se tocan: el esquema solo se carga cuando el volumen está vacío.
-Las tablas nuevas de la plataforma (respaldos) el backend las crea solo al arrancar si faltan.
-Cambios futuros de esquema llegarán como archivos de migración.
+Los datos no se tocan: el esquema base solo se carga cuando el volumen está vacío.
+Si la versión trae cambios a la base, el backend los aplica solo al arrancar (ver «Cambios a la base»).
+
+## Cambios a la base (migraciones)
+
+Ya no hay SQL sueltos que correr a mano. Cada cambio de esquema es un archivo en
+`backend/migrations/` y el backend aplica los pendientes al arrancar (o sea, con `./deploy.sh up`):
+
+- Antes de aplicarlos guarda un respaldo de la base (`antes-de-migrar-*.sql.gz`, los últimos 5).
+- Si uno falla, el backend no arranca y lo dice en `./deploy.sh logs backend`; la migración no se
+  registra y se reintenta al volver a desplegar.
+
+```bash
+./deploy.sh migrations                          # aplicadas, pendientes y respaldos previos
+./deploy.sh restore antes-de-migrar-….sql.gz    # regresar la base a antes de una migración
+```
+
+`db/schema/01-schema.sql` es la línea base (1.0.8) y ya no se modifica. Cómo crear una
+migración y las reglas: `backend/migrations/README.md`.
 
 ## Versiones
 
