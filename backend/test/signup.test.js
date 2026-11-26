@@ -250,3 +250,41 @@ test('dojoUrl usa el subdominio del dojo', () => {
     assert.equal(svc.dojoUrl('karate', '/login'), 'http://localhost:8081/login?dojo=karate');
   } finally { env.APP_BASE_URL = prev; }
 });
+
+describe('eliminar un dojo (derecho de cancelación)', () => {
+  test('candados: debe estar cancelado, confirmar la dirección y no estar dentro', async () => {
+    const id = (await pool.query("SELECT id FROM dojos WHERE slug = 'judo-sur'"))[0][0].id;
+    let r = await api('delete', `/platform/dojos/${id}`, T.super, { confirm_slug: 'judo-sur' });
+    assert.equal(r.status, 409); assert.equal(r.body.code, 'DOJO_NOT_CANCELLED');
+    ok(await api('patch', `/platform/dojos/${id}`, T.super, { status: 'cancelled' }));
+    r = await api('delete', `/platform/dojos/${id}`, T.super, { confirm_slug: 'judo' });
+    assert.equal(r.status, 400);
+    const inside = ok(await api('post', '/auth/switch-dojo', T.super, { dojo_id: id })).access_token;
+    r = await api('delete', `/platform/dojos/${id}`, inside, { confirm_slug: 'judo-sur' });
+    assert.equal(r.status, 409); assert.equal(r.body.code, 'DOJO_IN_USE');
+    assert.equal((await api('delete', `/platform/dojos/${id}`, T.other, { confirm_slug: 'judo-sur' })).status, 403);
+  });
+
+  test('borra el dojo y las cuentas que solo eran de ese dojo; quien está en otro dojo la conserva', async () => {
+    const judo = (await pool.query("SELECT id FROM dojos WHERE slug = 'judo-sur'"))[0][0].id;
+    const d = ok(await api('delete', `/platform/dojos/${judo}`, T.super, { confirm_slug: 'judo-sur' }));
+    assert.equal(d.accounts_deleted, 0, 'admin@otro.mx también es de «otro»');
+    assert.ok((await pool.query("SELECT id FROM users WHERE email = 'admin@otro.mx'"))[0][0]);
+
+    const karate = (await pool.query("SELECT id FROM dojos WHERE slug = 'karate-norte'"))[0][0].id;
+    ok(await api('patch', `/platform/dojos/${karate}`, T.super, { status: 'cancelled' }));
+    const k = ok(await api('delete', `/platform/dojos/${karate}`, T.super, { confirm_slug: 'karate-norte' }));
+    assert.equal(k.accounts_deleted, 1);
+    assert.equal((await pool.query("SELECT COUNT(*) AS n FROM users WHERE email = 'laura@karatenorte.mx'"))[0][0].n, 0);
+    for (const t of ['audit_log', 'dojo_signups', 'dojo_members']) {
+      assert.equal((await pool.query(`SELECT COUNT(*) AS n FROM ${t} WHERE dojo_id = ?`, [karate]))[0][0].n, 0, t);
+    }
+    const [[log]] = await pool.query("SELECT after_data FROM audit_log WHERE action = 'delete' AND entity = 'platform_dojo' AND entity_id = ?", [karate]);
+    assert.equal(log.after_data.slug, 'karate-norte');
+    assert.equal(log.after_data.email, undefined, 'sin datos personales');
+    // la dirección queda libre
+    assert.equal(ok(await api('get', '/signup/slug?slug=karate-norte')).available, true);
+    // Seikoukan y «otro» siguen igual
+    assert.equal((await pool.query('SELECT COUNT(*) AS n FROM dojos WHERE id IN (1, 2)'))[0][0].n, 2);
+  });
+});

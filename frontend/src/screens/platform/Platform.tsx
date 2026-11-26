@@ -188,7 +188,37 @@ function NewDojoDialog({ visible, onClose, onCreated, dojos, defaultCopy }: {
   );
 }
 
-function EditDojoDialog({ dojo, onClose, onSaved }: { dojo: PlatformDojo | null; onClose: () => void; onSaved: (d: PlatformDojo) => void }) {
+/** Eliminar un dojo cancelado: hay que escribir su dirección para confirmar */
+function DeleteDojoSection({ dojo, onDeleted }: { dojo: PlatformDojo; onDeleted: (msg: string) => void }) {
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  if (dojo.status !== 'cancelled') {
+    return <Text variant="small" color={palette.ink2}>{pt('deleteNeedsCancel')}</Text>;
+  }
+  async function del() {
+    setBusy(true); setErr(null);
+    try {
+      const r = await platformApi.deleteDojo(dojo.id, confirm.trim());
+      onDeleted(pt('deleted', { name: r.name, members: pt('members', { count: r.members }), accounts: pt('accountsCount', { count: r.accounts_deleted }) }));
+    } catch (e) { setErr(errorMessage(e)); } finally { setBusy(false); }
+  }
+  return (
+    <View style={{ gap: space.sm, borderWidth: 1, borderColor: palette.danger, borderRadius: radius.md, padding: space.md }}>
+      <Text variant="bodyStrong" color={palette.danger}>{pt('deleteTitle')}</Text>
+      <Text variant="small">{pt('deleteBody')}</Text>
+      <Field label={pt('deleteConfirm', { slug: dojo.slug })} value={confirm} onChangeText={setConfirm}
+        autoCapitalize="none" autoCorrect={false} />
+      {err ? <Notice tone="danger">{err}</Notice> : null}
+      <Button label={pt('deleteButton')} variant="danger" icon="trash-2" loading={busy}
+        disabled={confirm.trim() !== dojo.slug} onPress={del} />
+    </View>
+  );
+}
+
+function EditDojoDialog({ dojo, onClose, onSaved, onDeleted }: {
+  dojo: PlatformDojo | null; onClose: () => void; onSaved: (d: PlatformDojo) => void; onDeleted: (msg: string) => void;
+}) {
   const [v, setV] = useState<Pick<PlatformDojo, 'name' | 'short_name' | 'plan' | 'status' | 'trial_ends_at'> | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -231,6 +261,7 @@ function EditDojoDialog({ dojo, onClose, onSaved }: { dojo: PlatformDojo | null;
       {v.status === 'suspended' && dojo.status !== 'suspended' ? <Notice tone="warning">{pt('suspendWarn')}</Notice> : null}
       {v.status === 'cancelled' && dojo.status !== 'cancelled' ? <Notice tone="warning">{pt('cancelWarn')}</Notice> : null}
       {err ? <Notice tone="danger">{err}</Notice> : null}
+      <DeleteDojoSection dojo={dojo} onDeleted={onDeleted} />
     </Dialog>
   );
 }
@@ -274,7 +305,8 @@ function DojosTab() {
         defaultCopy={currentDojo && list.some((d) => d.id === currentDojo.id) ? currentDojo.id : null}
         onCreated={(text) => { setCreating(false); setMsg({ tone: 'success', text }); data.reload(); }} />
       <EditDojoDialog dojo={editing} onClose={() => setEditing(null)}
-        onSaved={(d) => { setEditing(null); setMsg({ tone: 'success', text: pt('saved') }); data.setData(list.map((x) => (x.id === d.id ? d : x))); }} />
+        onSaved={(d) => { setEditing(null); setMsg({ tone: 'success', text: pt('saved') }); data.setData(list.map((x) => (x.id === d.id ? d : x))); }}
+        onDeleted={(text) => { const id = editing?.id; setEditing(null); setMsg({ tone: 'success', text }); data.setData(list.filter((x) => x.id !== id)); }} />
     </View>
   );
 }

@@ -4,6 +4,7 @@
  *   GET    /dojos                 lista con métricas
  *   POST   /dojos                 alta de dojo (+ dueño, + copiar configuración)
  *   PATCH  /dojos/:id             nombre, plan, estado, fin de prueba
+ *   DELETE /dojos/:id             elimina el dojo y sus datos (solo cancelados; body { confirm_slug })
  *   GET    /signups               solicitudes de registro (?status=pending|approved|rejected|all) + ajustes
  *   PUT    /signups/settings      aceptar registros, días de prueba
  *   POST   /signups/:id/approve   crea el dojo en prueba y avisa al dueño
@@ -94,6 +95,11 @@ const updateSchema = z.object({
 router.patch('/dojos/:id', validate({ params: z.object({ id }), body: updateSchema }), async (req, res) => {
   res.json({ status: 'success', data: await dojos.updateDojo(req.valid.params.id, req.valid.body, req.auth.userId, req.ip) });
 });
+
+router.delete('/dojos/:id', validate({ params: z.object({ id }), body: z.object({ confirm_slug: z.string().trim().max(60) }) }),
+  async (req, res) => {
+    res.json({ status: 'success', data: await dojos.deleteDojo(req.valid.params.id, req.valid.body, req.auth, req.ip) });
+  });
 
 // ===========================================================================
 // Solicitudes de registro

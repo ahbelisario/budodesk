@@ -1,6 +1,6 @@
 /** Panel de la plataforma (solo superadmin): dojos y respaldos */
 import { Linking, Platform } from 'react-native';
-import { api } from './client';
+import { api, request } from './client';
 import { API_URL } from '../config';
 
 export type DojoPlan = 'trial' | 'basic' | 'pro';
@@ -48,6 +48,10 @@ export const platformApi = {
   createDojo: (b: NewDojo) => api.post<CreatedDojo>('/platform/dojos', b),
   updateDojo: (id: number, b: Partial<Pick<PlatformDojo, 'name' | 'short_name' | 'plan' | 'status' | 'trial_ends_at'>>) =>
     api.patch<PlatformDojo>(`/platform/dojos/${id}`, b),
+  /** Elimina el dojo y sus datos (solo cancelados). No se puede deshacer. */
+  deleteDojo: (id: number, confirmSlug: string) =>
+    request<{ id: number; slug: string; name: string; members: number; accounts_deleted: number }>(
+      `/platform/dojos/${id}`, { method: 'DELETE', body: { confirm_slug: confirmSlug } }).then((r) => r.data),
   backups: () => api.get<{ settings: BackupSettings; backups: Backup[]; running: boolean }>('/platform/backups'),
   saveSettings: (b: SettingsPatch) => api.put<BackupSettings>('/platform/backups/settings', b),
   runNow: () => api.post<Backup>('/platform/backups/run'),
