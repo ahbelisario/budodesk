@@ -1,6 +1,6 @@
 /**
  * Tareas periódicas dentro del proceso (sin cron externo):
- *   cada hora   → facturación, generación de sesiones, recordatorios de pago
+ *   cada hora   → facturación, generación de sesiones, recordatorios de pago, gastos/ingresos fijos del mes
  *   cada minuto → envío de notificaciones (push/email)
  * Todas son idempotentes: correrlas de más no duplica nada.
  * Si algún día corres varias réplicas del backend, deja BILLING_SCHEDULER=true
@@ -23,6 +23,8 @@ async function hourly() {
     const [dojos] = await pool.query(`SELECT id, timezone FROM dojos WHERE status IN ('trial','active')`);
     for (const d of dojos) await paymentReminders(d.id, todayIn(d.timezone), { addDays });
     await require('../modules/online/online.service').expireStale();
+    const recurring = await require('../modules/finance/finance.service').generateRecurringAll();
+    if (recurring) console.log(`[jobs] movimientos fijos creados: ${recurring}`);
     const changed = billing.filter((b) => b.renewed || b.past_due || b.expired || b.activated);
     if (changed.length || sessions) console.log(`[jobs] facturación ${JSON.stringify(changed)} · sesiones nuevas ${sessions}`);
   } catch (e) {

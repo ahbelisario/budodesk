@@ -6,6 +6,7 @@ import { ranksEn } from './ranks';
 import { dojoEn } from './dojo';
 import { platformEn } from './platform';
 import { onlineEn } from './online';
+import { reportsEn } from './reports';
 
 type Shape<T> = { [K in keyof T]: T[K] extends string ? string : Shape<T[K]> };
 
@@ -18,6 +19,7 @@ export const en: Shape<typeof es> = {
     continue: 'Continue',
     back: 'Back',
     close: 'Close',
+    add: 'Add',
     or: 'or',
     comingSoon: 'This section is being moved to the new design.',
     language: 'Language',
@@ -65,6 +67,7 @@ export const en: Shape<typeof es> = {
     schedule: 'Classes & attendance',
     ranks: 'Ranks & exams',
     platform: 'Platform',
+    reports: 'Reports',
     memberships: 'Memberships',
     billing: 'Billing',
     announcements: 'Announcements',
@@ -181,6 +184,7 @@ export const en: Shape<typeof es> = {
   dojo: dojoEn,
   platform: platformEn,
   online: onlineEn,
+  reports: reportsEn,
   ranks: ranksEn,
   billing: billingEn,
   classes: classesEn,

@@ -5,6 +5,7 @@ import { ranksEs } from './ranks';
 import { dojoEs } from './dojo';
 import { platformEs } from './platform';
 import { onlineEs } from './online';
+import { reportsEs } from './reports';
 export const es = {
   common: {
     loading: 'Cargando…',
@@ -14,6 +15,7 @@ export const es = {
     continue: 'Continuar',
     back: 'Regresar',
     close: 'Cerrar',
+    add: 'Agregar',
     or: 'o',
     comingSoon: 'Esta sección se está migrando al nuevo diseño.',
     language: 'Idioma',
@@ -61,6 +63,7 @@ export const es = {
     schedule: 'Clases y asistencia',
     ranks: 'Grados y exámenes',
     platform: 'Plataforma',
+    reports: 'Reportes',
     memberships: 'Membresías',
     billing: 'Cobranza',
     announcements: 'Avisos',
@@ -177,6 +180,7 @@ export const es = {
   dojo: dojoEs,
   platform: platformEs,
   online: onlineEs,
+  reports: reportsEs,
   ranks: ranksEs,
   billing: billingEs,
   classes: classesEs,

@@ -901,6 +901,81 @@ ALTER TABLE `rank_history`
   ADD CONSTRAINT `fk_rh_exam` FOREIGN KEY (`dojo_id`,`exam_candidate_id`) REFERENCES `exam_candidates` (`dojo_id`,`id`) ON DELETE RESTRICT;
 
 -- =====================================================================
+-- 8b. FINANZAS DEL DOJO: gastos y otros ingresos
+--     (lo que no pasa por la cuenta de un alumno: renta, luz, Taichi, seminarios…)
+-- =====================================================================
+
+-- Categorías que define cada dojo. Se crean unas por omisión la primera vez.
+CREATE TABLE `finance_categories` (
+  `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `dojo_id`     INT UNSIGNED NOT NULL,
+  `kind`        ENUM('expense','income') NOT NULL,
+  `name`        VARCHAR(80) NOT NULL,
+  `active`      TINYINT(1) NOT NULL DEFAULT 1,
+  `sort_order`  SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  `created_at`  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_fc_dojo_id` (`dojo_id`,`id`),
+  UNIQUE KEY `uq_fc_name` (`dojo_id`,`kind`,`name`),
+  CONSTRAINT `fk_fc_dojo` FOREIGN KEY (`dojo_id`) REFERENCES `dojos` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Movimientos fijos que se repiten cada mes (renta, internet…). Un job crea el
+-- movimiento de cada mes el día indicado; borrar ese movimiento no lo vuelve a crear.
+CREATE TABLE `finance_recurring` (
+  `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `dojo_id`       INT UNSIGNED NOT NULL,
+  `kind`          ENUM('expense','income') NOT NULL,
+  `category_id`   INT UNSIGNED NOT NULL,
+  `description`   VARCHAR(255) NULL,
+  `amount`        DECIMAL(10,2) NOT NULL,
+  `currency`      CHAR(3) NOT NULL,
+  `day_of_month`  TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  `starts_on`     DATE NOT NULL COMMENT 'primer mes (día 1)',
+  `ends_on`       DATE NULL COMMENT 'último mes (día 1); NULL = sin fin',
+  `active`        TINYINT(1) NOT NULL DEFAULT 1,
+  `last_period`   DATE NULL COMMENT 'último mes ya generado (día 1)',
+  `created_by`    INT UNSIGNED NULL,
+  `created_at`    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_fr_dojo_id` (`dojo_id`,`id`),
+  CONSTRAINT `fk_fr_cat` FOREIGN KEY (`dojo_id`,`category_id`) REFERENCES `finance_categories` (`dojo_id`,`id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_fr_by`  FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `chk_fr_amount` CHECK (`amount` > 0),
+  CONSTRAINT `chk_fr_day` CHECK (`day_of_month` BETWEEN 1 AND 28)
+) ENGINE=InnoDB;
+
+-- Cada gasto u otro ingreso
+CREATE TABLE `finance_entries` (
+  `id`               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `dojo_id`          INT UNSIGNED NOT NULL,
+  `kind`             ENUM('expense','income') NOT NULL,
+  `category_id`      INT UNSIGNED NOT NULL,
+  `description`      VARCHAR(255) NULL,
+  `amount`           DECIMAL(10,2) NOT NULL,
+  `currency`         CHAR(3) NOT NULL,
+  `entry_date`       DATE NOT NULL,
+  `method`           ENUM('cash','transfer','card','other') NULL,
+  `reference`        VARCHAR(100) NULL,
+  `notes`            VARCHAR(500) NULL,
+  `recurring_id`     INT UNSIGNED NULL,
+  `recurring_period` DATE NULL,
+  `created_by`       INT UNSIGNED NULL,
+  `created_at`       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_fe_dojo_id` (`dojo_id`,`id`),
+  UNIQUE KEY `uq_fe_recurring` (`recurring_id`,`recurring_period`),
+  KEY `idx_fe_date` (`dojo_id`,`entry_date`),
+  KEY `idx_fe_cat` (`dojo_id`,`category_id`),
+  CONSTRAINT `fk_fe_cat` FOREIGN KEY (`dojo_id`,`category_id`) REFERENCES `finance_categories` (`dojo_id`,`id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_fe_rec` FOREIGN KEY (`recurring_id`) REFERENCES `finance_recurring` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_fe_by`  FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `chk_fe_amount` CHECK (`amount` > 0)
+) ENGINE=InnoDB;
+
+-- =====================================================================
 -- 9. COMUNICACIÓN: avisos y notificaciones
 -- =====================================================================
 

@@ -24,6 +24,7 @@ export const NAV: NavItem[] = [
   { key: 'announcements', href: '/announcements', label: 'nav.announcements', icon: 'bell' },
   { key: 'progress', href: '/progress', label: 'nav.progress', icon: 'trending-up', studentOnly: true },
   { key: 'payments', href: '/payments', label: 'nav.payments', icon: 'credit-card', studentOnly: true },
+  { key: 'reports', href: '/reports', label: 'nav.reports', icon: 'bar-chart-2', roles: ['owner', 'admin', 'staff', 'instructor'] },
   { key: 'settings', href: '/settings', label: 'nav.settings', icon: 'settings', roles: ['owner', 'admin'] },
   { key: 'platform', href: '/platform', label: 'nav.platform', icon: 'server', superadminOnly: true },
   { key: 'profile', href: '/profile', label: 'nav.profile', icon: 'user' },

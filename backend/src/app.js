@@ -55,6 +55,8 @@ function createApp() {
   app.use('/api/v2/announcements', announcements);
   app.use('/api/v2/platform', require('./modules/platform/platform.routes'));
   app.use('/api/v2/online-payments', require('./modules/online/online.routes'));
+  app.use('/api/v2/finance', require('./modules/finance/finance.routes'));
+  app.use('/api/v2/reports', require('./modules/reports/reports.routes'));
 
   registerEventHandlers(app);
 
