@@ -7,6 +7,10 @@ Formato: `MAYOR.MENOR.PARCHE`.
 
 Cada versión se crea con `./release.sh` y queda marcada en git como `vX.Y.Z`.
 
+## [1.0.12] - 2026-11-26
+
+- Registro de dojos con prueba gratis y solo lectura al vencer
+
 ## [1.0.11] - 2026-11-26
 
 - Renombra referencias del repo: fsms → budodesk
