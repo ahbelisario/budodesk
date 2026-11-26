@@ -13,7 +13,7 @@ import { Dialog } from '../../ui/Dialog';
 import { DateField, FilterChips, FormGrid, SearchField, Select, Tabs } from '../../ui/forms';
 import { palette, space } from '../../theme/tokens';
 import { useIsWide } from '../../navigation/AppShell';
-import { t, useLanguage } from '../../i18n';
+import { getLanguage, t, useLanguage } from '../../i18n';
 import { dateTimeShort, money } from '../../utils/format';
 import { PaymentDialog } from '../members/BillingTab';
 import { PersonPicker, type PickedPerson } from '../members/PersonPicker';
@@ -170,16 +170,31 @@ function ChargesTab({ onChanged, version }: { onChanged: () => void; version: nu
 }
 
 // ---------------------------------------------------------------------------
-function PaymentsTab({ onChanged, version }: { onChanged: () => void; version: number }) {
+/** 'AAAA-MM' → { from, to } */
+function monthOf(ym: string) {
+  const [y, m] = ym.split('-').map(Number);
+  const f = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { from: f(new Date(y, m - 1, 1)), to: f(new Date(y, m, 0)) };
+}
+const monthName = (ym: string) => {
+  const [y, m] = ym.split('-').map(Number);
+  const s = new Intl.DateTimeFormat(getLanguage() === 'en' ? 'en-US' : 'es-MX', { month: 'long', year: 'numeric' }).format(new Date(y, m - 1, 1));
+  return s[0].toUpperCase() + s.slice(1);
+};
+
+function PaymentsTab({ onChanged, version, initialMonth }: { onChanged: () => void; version: number; initialMonth?: string }) {
   const router = useRouter();
   const wide = useIsWide();
   const { hasRole } = useSession();
   const admin = hasRole('admin');
-  const [range, setRange] = useState<'thisMonth' | 'lastMonth' | 'all'>('thisMonth');
+  const thisYm = monthRange(0).from.slice(0, 7); const lastYm = monthRange(-1).from.slice(0, 7);
+  const custom = initialMonth && /^\d{4}-\d{2}$/.test(initialMonth) && initialMonth !== thisYm && initialMonth !== lastYm ? initialMonth : null;
+  const [range, setRange] = useState<'thisMonth' | 'lastMonth' | 'all' | 'month'>(
+    custom ? 'month' : initialMonth === lastYm ? 'lastMonth' : 'thisMonth');
   const [method, setMethod] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const dq = useDebounced(q);
-  const r = range === 'all' ? {} : monthRange(range === 'thisMonth' ? 0 : -1);
+  const r = range === 'all' ? {} : range === 'month' && custom ? monthOf(custom) : monthRange(range === 'thisMonth' ? 0 : -1);
   const data = useApi(() => billingApi.payments({ status: 'all', ...r, method: method ?? undefined, q: dq || undefined, page_size: 100 }), [range, method, dq, version]);
   const [cancelling, setCancelling] = useState<PaymentRow | null>(null);
   const [msg, setMsg] = useState<Msg>(null);
@@ -192,11 +207,14 @@ function PaymentsTab({ onChanged, version }: { onChanged: () => void; version: n
         <SearchField value={q} onChange={setQ} placeholder={bt('search')} />
         <View style={{ width: wide ? 220 : '100%' }}>
           <Select label={t('members.method')} value={method} onChange={setMethod} allowClear placeholder={bt('allMethods')}
-            options={['cash', 'transfer', 'card', 'paypal', 'other'].map((m) => ({ value: m, label: t(`members.m_${m}`) }))} />
+            options={['cash', 'transfer', 'card', 'mercadopago', 'paypal', 'other'].map((m) => ({ value: m, label: t(`members.m_${m}`) }))} />
         </View>
       </View>
       <FilterChips label={bt('tab_payments')} value={range} onChange={setRange}
-        options={(['thisMonth', 'lastMonth', 'all'] as const).map((k) => ({ key: k, label: bt(`p_${k}`) }))} />
+        options={[
+          ...(custom ? [{ key: 'month' as const, label: monthName(custom) }] : []),
+          ...(['thisMonth', 'lastMonth', 'all'] as const).map((k) => ({ key: k, label: bt(`p_${k}`) })),
+        ]} />
       {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
       {meta?.sum != null && rows.length ? <Text variant="small" color={palette.ink2}>{t('members.payments')}: {rows.length} · {money(meta.sum)}</Text> : null}
       <Card padding={0} style={{ overflow: 'hidden' }}>
@@ -237,7 +255,7 @@ function PaymentsTab({ onChanged, version }: { onChanged: () => void; version: n
 export function Billing() {
   useLanguage();
   const wide = useIsWide();
-  const params = useLocalSearchParams<{ new?: string; tab?: string }>();
+  const params = useLocalSearchParams<{ new?: string; tab?: string; month?: string }>();
   const { hasRole } = useSession();
   const admin = hasRole('admin');
   const [tab, setTab] = useState<'charges' | 'payments'>(params.tab === 'payments' ? 'payments' : 'charges');
@@ -302,7 +320,7 @@ export function Billing() {
       </Card>
 
       <Tabs value={tab} onChange={setTab} tabs={[{ key: 'charges', label: bt('tab_charges') }, { key: 'payments', label: bt('tab_payments') }]} />
-      {tab === 'charges' ? <ChargesTab onChanged={changed} version={version} /> : <PaymentsTab onChanged={changed} version={version} />}
+      {tab === 'charges' ? <ChargesTab onChanged={changed} version={version} /> : <PaymentsTab onChanged={changed} version={version} initialMonth={params.month} />}
 
       <PaymentDialog visible={payOpen} onClose={() => setPayOpen(false)}
         onSaved={() => { setPayOpen(false); setMsg({ tone: 'success', text: t('members.paymentSaved') }); changed(); }} />

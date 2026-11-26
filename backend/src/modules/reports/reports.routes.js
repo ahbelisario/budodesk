@@ -14,7 +14,7 @@ const { z } = require('zod');
 const { authenticate, requireDojo, requireRole } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validate');
 const { badRequest } = require('../../utils/errors');
-const { todayIn, addMonths, addDays } = require('../../utils/dates');
+const { todayIn, addMonths, addDays, tzOffset } = require('../../utils/dates');
 const finance = require('../finance/finance.service');
 
 const router = express.Router();
@@ -26,14 +26,6 @@ const ym = z.string().regex(/^\d{4}-\d{2}$/, 'Mes AAAA-MM');
 const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha AAAA-MM-DD');
 const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const NAME = "CONCAT_WS(' ', p.first_name, p.last_name)";
-
-/** Desfase actual de la zona del dojo, '-06:00' (CONVERT_TZ con nombres requiere tablas de zonas en MySQL) */
-function tzOffset(timezone, now = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'longOffset' }).formatToParts(now);
-  const v = parts.find((p) => p.type === 'timeZoneName')?.value || 'GMT';
-  const m = v.match(/GMT([+-]\d{2}):?(\d{2})?/);
-  return m ? `${m[1]}:${m[2] || '00'}` : '+00:00';
-}
 
 async function dojoInfo(tdb) {
   const d = await tdb.one('SELECT timezone, currency FROM dojos WHERE id = :dojoId');

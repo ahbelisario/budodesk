@@ -4,7 +4,7 @@
  */
 const { pool } = require('../../db/pool');
 const { tenantDb } = require('../../db/tenant');
-const { todayIn, addMonths } = require('../../utils/dates');
+const { todayIn, addMonths, addDays, tzOffset } = require('../../utils/dates');
 
 const DEFAULTS = {
   es: {
@@ -78,4 +78,20 @@ async function generateRecurringAll() {
   return total;
 }
 
-module.exports = { ensureCategories, generateRecurring, generateRecurringAll, DEFAULTS };
+/**
+ * Cobros a alumnos (Cobranza) entre dos fechas del dojo: lo pagado, cuántos pagos y las comisiones
+ * de pago en línea. Mismo criterio que el reporte de Finanzas (fecha de pago en la zona del dojo).
+ */
+async function tuitionSummary(tdb, from, to) {
+  const d = await tdb.one('SELECT timezone FROM dojos WHERE id = :dojoId');
+  const local = "CONVERT_TZ(paid_at, '+00:00', :off)";
+  const [r] = await tdb.query(
+    `SELECT COUNT(*) AS n, COALESCE(SUM(amount - refunded_amount), 0) AS amount, COALESCE(SUM(COALESCE(provider_fee, 0)), 0) AS fees
+       FROM payments
+      WHERE dojo_id = :dojoId AND status IN ('completed','partially_refunded')
+        AND ${local} >= :from AND ${local} < :next`,
+    { off: tzOffset(d?.timezone || 'America/Mexico_City'), from, next: addDays(to, 1) });
+  return { count: Number(r.n), amount: Number(r.amount), online_fees: Number(r.fees) };
+}
+
+module.exports = { ensureCategories, generateRecurring, generateRecurringAll, tuitionSummary, DEFAULTS };

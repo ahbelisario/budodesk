@@ -11,6 +11,10 @@ export type FinEntryInput = {
   kind: FinKind; category_id: number; amount: number; entry_date: string;
   description?: string | null; method?: FinEntry['method']; reference?: string | null; notes?: string | null;
 };
+export type FinEntriesMeta = {
+  income: number; expense: number; tuition: { count: number; amount: number; online_fees: number } | null;
+  income_total: number; expense_total: number; net: number;
+};
 export type FinRecurring = {
   id: number; kind: FinKind; category_id: number; category: string; description: string | null; amount: number; currency: string;
   day_of_month: number; starts_on: string; ends_on: string | null; active: number; last_period: string | null;

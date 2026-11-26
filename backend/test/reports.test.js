@@ -73,7 +73,10 @@ describe('gastos y otros ingresos', () => {
     let list = ok(await api('get', `/finance/entries?from=${MONTH}-01&to=${TODAY}`, T.admin));
     assert.equal(list.length, 3);
     const meta = (await api('get', `/finance/entries?from=${MONTH}-01&to=${TODAY}`, T.admin)).body.meta;
-    assert.deepEqual(meta, { income: 4800, expense: 15310.5, net: -10510.5 });
+    assert.deepEqual(meta, {
+      income: 4800, expense: 15310.5, tuition: { count: 0, amount: 0, online_fees: 0 },
+      income_total: 4800, expense_total: 15310.5, net: -10510.5,
+    });
     ok(await api('delete', `/finance/entries/${tc.id}`, T.admin));
     list = ok(await api('get', `/finance/entries?from=${MONTH}-01&to=${TODAY}&kind=income`, T.admin));
     assert.equal(list.length, 0);
@@ -158,6 +161,18 @@ describe('reportes', () => {
     assert.equal(m.income_total, 6150);
     assert.equal(m.net, -9373.5);
     assert.equal(r.totals.net, -9373.5);
+  });
+
+  test('el resumen de gastos e ingresos del mes incluye los cobros a alumnos y cuadra con Finanzas', async () => {
+    const fin = ok(await api('get', `/reports/finance?from=${MONTH}&to=${MONTH}`, T.admin)).months[0];
+    const last = addDays(addMonths(`${MONTH}-01`, 1), -1);
+    const meta = (await api('get', `/finance/entries?from=${MONTH}-01&to=${last}`, T.admin)).body.meta;
+    assert.deepEqual(meta.tuition, { count: 3, amount: 1350, online_fees: 30 });
+    assert.equal(meta.income_total, fin.income_total);
+    assert.equal(meta.expense_total, fin.expense_total);
+    assert.equal(meta.net, fin.net);
+    // filtrando por tipo ya no se suman
+    assert.equal((await api('get', `/finance/entries?from=${MONTH}-01&to=${last}&kind=income`, T.admin)).body.meta.tuition, null);
   });
 
   test('por defecto: los últimos 12 meses con el saldo acumulado', async () => {

@@ -85,7 +85,16 @@ function ageOn(dob, onDate) {
   return y - by - ((m < bm || (m === bm && d < bd)) ? 1 : 0);
 }
 
+/** Desfase actual de una zona horaria, '-06:00' (para CONVERT_TZ sin tablas de zonas en MySQL) */
+function tzOffset(timezone, now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'longOffset' }).formatToParts(now);
+  const v = parts.find((x) => x.type === 'timeZoneName')?.value || 'GMT';
+  const m = v.match(/GMT([+-]\d{2}):?(\d{2})?/);
+  return m ? `${m[1]}:${m[2] || '00'}` : '+00:00';
+}
+
 module.exports = {
+  tzOffset,
   todayIn, nowTimeIn, zonedToUtc, addDays, addMonths, periodEnd,
   weekdayIndex, weekStart, WEEKDAYS, daysBetween, ageOn,
 };

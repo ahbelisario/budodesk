@@ -1,8 +1,9 @@
 /** Gastos y otros ingresos del dojo: movimientos del mes, fijos mensuales y categorías */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import {
-  financeApi, type FinCategory, type FinEntry, type FinKind, type FinRecurring,
+  financeApi, type FinCategory, type FinEntriesMeta, type FinEntry, type FinKind, type FinRecurring,
 } from '../../api/reports';
 import { useApi } from '../../utils/useApi';
 import { errorMessage } from '../../utils/errors';
@@ -228,6 +229,7 @@ function CategoriesDialog({ visible, categories, onClose, onChanged }: {
 // ---------------------------------------------------------------------------
 export function MovementsTab() {
   const wide = useIsWide();
+  const router = useRouter();
   const [month, setMonth] = useState(ymdLocal(new Date()).slice(0, 7));
   const [version, setVersion] = useState(0);
   const range = { from: `${month}-01`, to: lastDay(month) };
@@ -239,13 +241,15 @@ export function MovementsTab() {
   const [catsOpen, setCatsOpen] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
   const rows = entries.data?.data ?? [];
-  const meta = entries.data?.meta as { income: number; expense: number; net: number } | undefined;
+  const meta = entries.data?.meta as FinEntriesMeta | undefined;
+  const tuition = meta?.tuition;
   const categories = cats.data ?? [];
   const today = ymdLocal(new Date());
   const defaultDate = today.startsWith(month) ? today : `${month}-01`;
   const changed = (text: string) => { setDialog(null); setRecDialog(null); setMsg({ tone: 'success', text }); setVersion((v) => v + 1); };
   const cur = rows[0]?.currency ?? 'MXN';
-  const sorted = useMemo(() => rows, [rows]);
+  const sorted = rows;
+  const goBilling = () => router.push(`/billing?tab=payments&month=${month}` as never);
 
   return (
     <View style={{ gap: space.md }}>
@@ -264,8 +268,8 @@ export function MovementsTab() {
       {entries.error ? <Notice tone="danger">{entries.error}</Notice> : null}
 
       <Card style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.lg }}>
-        <Tile label={rt('monthIncome')} value={money(meta?.income ?? 0, cur)} />
-        <Tile label={rt('monthExpense')} value={money(meta?.expense ?? 0, cur)} />
+        <Tile label={rt('monthIncome')} value={money(meta?.income_total ?? 0, cur)} />
+        <Tile label={rt('monthExpense')} value={money(meta?.expense_total ?? 0, cur)} />
         <Tile label={rt('monthNet')} value={money(meta?.net ?? 0, cur)} tone={(meta?.net ?? 0) < 0 ? palette.danger : undefined} />
       </Card>
 
@@ -276,11 +280,40 @@ export function MovementsTab() {
         </View>
       ) : null}
       <Card padding={0} style={{ overflow: 'hidden' }}>
-        {entries.loading && !entries.data ? <Loading /> : sorted.length === 0 ? (
+        {entries.loading && !entries.data ? <Loading /> : sorted.length === 0 && !tuition?.count ? (
           <EmptyState icon="file-text" title={rt('noEntries')} body={rt('noEntriesBody')} />
-        ) : sorted.map((e, i) => (
+        ) : null}
+        {/* Cobros a alumnos: solo lectura, se registran en Cobranza */}
+        {tuition?.count ? (
+          <Pressable accessibilityRole="link" onPress={goBilling}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, backgroundColor: palette.sunken }}>
+            <Icon name="users" size={18} color={palette.ink2} />
+            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+              <Text variant="bodyStrong" numberOfLines={1}>{rt('tuition')}</Text>
+              <Text variant="caption" color={palette.ink2} numberOfLines={1}>{rt('paymentsN', { count: tuition.count })} · {rt('fromBilling')}</Text>
+            </View>
+            <Text variant="bodyStrong">+{money(tuition.amount, cur)}</Text>
+            <Icon name="chevron-right" size={18} color={palette.ink3} />
+          </Pressable>
+        ) : null}
+        {tuition?.online_fees ? (
+          <View>
+            <Divider />
+            <Pressable accessibilityRole="link" onPress={goBilling}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, backgroundColor: palette.sunken }}>
+              <Icon name="percent" size={18} color={palette.ink2} />
+              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                <Text variant="bodyStrong" numberOfLines={1}>{rt('onlineFees')}</Text>
+                <Text variant="caption" color={palette.ink2} numberOfLines={1}>{rt('fromBilling')}</Text>
+              </View>
+              <Text variant="bodyStrong">−{money(tuition.online_fees, cur)}</Text>
+              <Icon name="chevron-right" size={18} color={palette.ink3} />
+            </Pressable>
+          </View>
+        ) : null}
+        {sorted.map((e, i) => (
           <View key={e.id}>
-            {i > 0 ? <Divider /> : null}
+            {i > 0 || tuition?.count ? <Divider /> : null}
             <Pressable accessibilityRole="button" onPress={() => setDialog({ kind: e.kind, entry: e })}
               style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md }}>
               <Icon name={e.kind === 'expense' ? 'arrow-up-right' : 'arrow-down-left'} size={18} color={palette.ink2} />

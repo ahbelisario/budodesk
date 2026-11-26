@@ -5,7 +5,7 @@
  *   POST   /categories                  { kind, name }
  *   PATCH  /categories/:id              { name?, active?, sort_order? }
  *   DELETE /categories/:id              solo si no tiene movimientos
- *   GET    /entries?from&to&kind&category_id   movimientos + totales
+ *   GET    /entries?from&to&kind&category_id   movimientos + totales (con rango: incluye los cobros a alumnos)
  *   POST   /entries                     { kind, category_id, amount, entry_date, description?, method?, reference?, notes? }
  *   PATCH  /entries/:id
  *   DELETE /entries/:id
@@ -122,8 +122,21 @@ router.get('/entries', validate({
        FROM finance_entries e JOIN finance_categories c ON c.dojo_id = e.dojo_id AND c.id = e.category_id
       WHERE ${where.join(' AND ')}
       ORDER BY e.entry_date DESC, e.id DESC LIMIT 1000`, q);
-  const sum = (k) => Math.round(rows.filter((r) => r.kind === k).reduce((s, r) => s + Number(r.amount), 0) * 100) / 100;
-  res.json({ status: 'success', data: rows, meta: { income: sum('income'), expense: sum('expense'), net: Math.round((sum('income') - sum('expense')) * 100) / 100 } });
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const sum = (k) => r2(rows.filter((r) => r.kind === k).reduce((s, r) => s + Number(r.amount), 0));
+  // Con un rango de fechas (y sin filtrar por categoría o tipo) se suman también los cobros a alumnos,
+  // para que el balance sea el real; solo informativo: esos pagos se registran en Cobranza.
+  const tuition = q.from && q.to && !q.kind && !q.category_id ? await svc.tuitionSummary(req.tdb, q.from, q.to) : null;
+  const income = sum('income'); const expense = sum('expense');
+  const incomeTotal = r2(income + (tuition?.amount ?? 0));
+  const expenseTotal = r2(expense + (tuition?.online_fees ?? 0));
+  res.json({
+    status: 'success', data: rows,
+    meta: {
+      income, expense, tuition,
+      income_total: incomeTotal, expense_total: expenseTotal, net: r2(incomeTotal - expenseTotal),
+    },
+  });
 });
 
 router.post('/entries', validate({ body: z.object(entryFields) }), async (req, res) => {
