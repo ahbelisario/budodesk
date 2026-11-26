@@ -1,6 +1,6 @@
 {
   "name": "budodesk-backend",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "private": true,
   "author": "Arturo Hernandez <arthur@hdez.mx>",
   "main": "src/server.js",
