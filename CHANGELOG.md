@@ -7,6 +7,11 @@ Formato: `MAYOR.MENOR.PARCHE`.
 
 Cada versión se crea con `./release.sh` y queda marcada en git como `vX.Y.Z`.
 
+## [1.0.15] - 2026-11-26
+
+- Bitácora del dojo: lo que hace la plataforma solo lo ve el superadmin
+- Registro de dojos: el botón dice qué falta en lugar de quedar deshabilitado
+
 ## [1.0.14] - 2026-11-26
 
 - Subdominio sin dojo: redirige al registro en budodesk.com
