@@ -85,6 +85,7 @@ export const billingApi = {
   payments: (q: { status?: string; user_id?: number; method?: string; from?: string; to?: string; q?: string } & Page) => api.getPage<PaymentRow[]>('/payments', q),
   myPayments: (userId?: number) => api.get<PaymentRow[]>('/payments/mine', { user_id: userId, page_size: 50 }),
   cancelPayment: (id: number, reason: string) => api.post(`/payments/${id}/cancel`, { reason }),
+  refundPayment: (id: number, reason: string) => api.post(`/payments/${id}/refund`, { reason }),
 
   paymentMethods: () => api.get<PaymentMethods>('/dojo/payment-methods'),
 };

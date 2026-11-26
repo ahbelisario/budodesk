@@ -197,6 +197,7 @@ function PaymentsTab({ onChanged, version, initialMonth }: { onChanged: () => vo
   const r = range === 'all' ? {} : range === 'month' && custom ? monthOf(custom) : monthRange(range === 'thisMonth' ? 0 : -1);
   const data = useApi(() => billingApi.payments({ status: 'all', ...r, method: method ?? undefined, q: dq || undefined, page_size: 100 }), [range, method, dq, version]);
   const [cancelling, setCancelling] = useState<PaymentRow | null>(null);
+  const [refunding, setRefunding] = useState<PaymentRow | null>(null);
   const [msg, setMsg] = useState<Msg>(null);
   const rows = data.data?.data ?? [];
   const meta = data.data?.meta as { sum?: number } | undefined;
@@ -219,7 +220,7 @@ function PaymentsTab({ onChanged, version, initialMonth }: { onChanged: () => vo
       {meta?.sum != null && rows.length ? <Text variant="small" color={palette.ink2}>{t('members.payments')}: {rows.length} · {money(meta.sum)}</Text> : null}
       <Card padding={0} style={{ overflow: 'hidden' }}>
         {data.loading ? <Loading /> : rows.length === 0 ? <EmptyState icon="credit-card" title={bt('noPayments')} /> : rows.map((p, i) => {
-          const cancelled = p.status === 'cancelled';
+          const cancelled = p.status === 'cancelled' || p.status === 'refunded';
           return (
             <View key={p.id}>
               {i > 0 ? <Divider /> : null}
@@ -232,11 +233,15 @@ function PaymentsTab({ onChanged, version, initialMonth }: { onChanged: () => vo
                   </Text>
                 </Pressable>
                 <View style={{ alignItems: 'flex-end', gap: 4, flexDirection: wide ? 'row' : 'column', ...(wide ? { alignItems: 'center', gap: space.sm } : {}) }}>
-                  {cancelled ? <Badge label={bt('cancelledPayment')} /> : null}
+                  {cancelled ? <Badge label={bt(p.status === 'refunded' ? 'refundedPayment' : 'cancelledPayment')} /> : null}
                   <Text variant="bodyStrong" style={{ textDecorationLine: cancelled ? 'line-through' : 'none' }}>{money(p.amount, p.currency)}</Text>
                   {admin && p.status === 'completed' && !p.provider
                     ? (wide ? <Button label={bt('cancelPayment')} size="sm" variant="ghost" onPress={() => setCancelling(p)} />
                       : <Pressable accessibilityRole="button" hitSlop={8} onPress={() => setCancelling(p)}><Text variant="caption" color={palette.danger} style={{ textDecorationLine: 'underline' }}>{bt('cancelPayment')}</Text></Pressable>)
+                    : null}
+                  {admin && p.status === 'completed' && p.provider
+                    ? (wide ? <Button label={bt('refundPayment')} size="sm" variant="ghost" onPress={() => setRefunding(p)} />
+                      : <Pressable accessibilityRole="button" hitSlop={8} onPress={() => setRefunding(p)}><Text variant="caption" color={palette.danger} style={{ textDecorationLine: 'underline' }}>{bt('refundPayment')}</Text></Pressable>)
                     : null}
                 </View>
               </View>
@@ -248,6 +253,10 @@ function PaymentsTab({ onChanged, version, initialMonth }: { onChanged: () => vo
         body={cancelling ? `${cancelling.user_name} · ${dateTimeShort(cancelling.paid_at)}\n${bt('cancelPaymentBody')}` : ''} action={bt('cancelPayment')}
         onClose={() => setCancelling(null)}
         onConfirm={async (reason) => { await billingApi.cancelPayment(cancelling!.id, reason); setCancelling(null); setMsg({ tone: 'success', text: bt('paymentCancelled') }); data.reload(); onChanged(); }} />
+      <ReasonDialog visible={!!refunding} title={refunding ? bt('refundTitle', { amount: money(refunding.amount) }) : ''}
+        body={refunding ? `${refunding.user_name} · ${dateTimeShort(refunding.paid_at)}\n${bt('refundBody', { provider: t(`members.m_${refunding.method}`) })}` : ''} action={bt('refundPayment')}
+        onClose={() => setRefunding(null)}
+        onConfirm={async (reason) => { await billingApi.refundPayment(refunding!.id, reason); setRefunding(null); setMsg({ tone: 'success', text: bt('paymentRefunded') }); data.reload(); onChanged(); }} />
     </View>
   );
 }

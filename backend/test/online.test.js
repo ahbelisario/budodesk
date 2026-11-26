@@ -256,6 +256,29 @@ describe('PayPal', () => {
     assert.equal(fee.status, 'paid');
     assert.equal(Number(fee.total), 45.83);
     ok(await api('patch', '/dojo/payment-settings', T.admin, { paypal_fee_percent: null, paypal_fee_fixed: null }));
+
+    // Marcar como reembolsado: el cargo vuelve a quedar pendiente y el recargo se anula
+    const pid = (await pool.query('SELECT payment_id FROM online_checkouts WHERE id = :id', { id: co.checkout_id }))[0][0].payment_id;
+    assert.equal((await api('post', `/payments/${pid}/cancel`, T.admin, { reason: 'x' })).status, 409); // en línea: no se cancela
+    assert.equal((await api('post', `/payments/${pid}/refund`, T.student, { reason: 'x' })).status, 403);
+    const before = (await pool.query("SELECT COALESCE(SUM(amount - refunded_amount), 0) s FROM payments WHERE dojo_id = 1 AND status IN ('completed','partially_refunded')"))[0][0].s;
+    const p = ok(await api('post', `/payments/${pid}/refund`, T.admin, { reason: 'Prueba' }));
+    assert.equal(p.status, 'refunded');
+    assert.equal(Number(p.refunded_amount), 1045.83);
+    assert.match(p.notes, /Reembolsado: Prueba/);
+    const cr = await chargeRow(c);
+    assert.equal(cr.status, 'pending');
+    assert.equal(Number(cr.amount_paid), 0);
+    const [[fee2]] = await pool.query("SELECT status FROM charges WHERE dojo_id = 1 AND user_id = 2 AND description LIKE 'Comisión de pago en línea%' ORDER BY id DESC LIMIT 1");
+    assert.equal(fee2.status, 'void');
+    const after = (await pool.query("SELECT COALESCE(SUM(amount - refunded_amount), 0) s FROM payments WHERE dojo_id = 1 AND status IN ('completed','partially_refunded')"))[0][0].s;
+    assert.equal(Math.round((Number(before) - Number(after)) * 100) / 100, 1045.83);
+    // una segunda vez: ya no
+    assert.equal((await api('post', `/payments/${pid}/refund`, T.admin, { reason: 'x' })).status, 409);
+    // y los pagos a mano no se "reembolsan", se cancelan
+    const [[cash]] = await pool.query("SELECT id FROM payments WHERE dojo_id = 1 AND provider IS NULL AND status = 'completed' LIMIT 1");
+    if (cash) assert.equal((await api('post', `/payments/${cash.id}/refund`, T.admin, { reason: 'x' })).status, 409);
+    await pool.query("UPDATE charges SET status = 'void' WHERE id = :c", { c }); // que no afecte a las pruebas siguientes
   });
 
   test('si un cargo se pagó en efectivo mientras tanto, lo pagado en línea queda como saldo a favor', async () => {

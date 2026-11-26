@@ -270,6 +270,36 @@ payments.post('/:id/cancel', requireRole('admin'), validate({
   res.json({ status: 'success', data: await loadPayment(req.tdb, paymentId) });
 });
 
+// Marcar como reembolsado un pago en línea (el reembolso en sí se hace en el panel de Mercado Pago o PayPal).
+// El pago se queda registrado pero ya no cuenta como ingreso; sus cargos vuelven a quedar pendientes y el
+// recargo por comisión que pagó el alumno se anula.
+payments.post('/:id/refund', requireRole('admin'), validate({
+  params: z.object({ id }), body: z.object({ reason: z.string().trim().min(1).max(255) }),
+}), async (req, res) => {
+  const paymentId = req.valid.params.id;
+  await req.tdb.transaction(async (t) => {
+    const p = await t.one('SELECT status, provider, amount FROM payments WHERE dojo_id = :dojoId AND id = :paymentId FOR UPDATE', { paymentId });
+    if (!p) throw notFound('Pago no encontrado');
+    if (!p.provider) throw conflict('Los pagos registrados a mano se cancelan, no se reembolsan', 'USE_CANCEL');
+    if (p.status !== 'completed') throw conflict('Solo se pueden marcar como reembolsados pagos completados');
+    const co = await t.one('SELECT charge_ids FROM online_checkouts WHERE dojo_id = :dojoId AND payment_id = :paymentId', { paymentId });
+    const original = new Set((co ? (typeof co.charge_ids === 'string' ? JSON.parse(co.charge_ids) : co.charge_ids) : []).map(Number));
+    const reversed = await svc.reversePayment(t, paymentId);
+    // El recargo por comisión se creó al pagar: no es un adeudo real, se anula
+    const feeCharges = co ? reversed.map((a) => Number(a.charge_id)).filter((c) => !original.has(c)) : [];
+    if (feeCharges.length) {
+      await t.query(
+        `UPDATE charges SET status = 'void' WHERE dojo_id = :dojoId AND id IN (:ids) AND type = 'other' AND amount_paid = 0`,
+        { ids: feeCharges });
+    }
+    await t.query(
+      `UPDATE payments SET status = 'refunded', refunded_amount = amount, notes = CONCAT_WS(' · ', notes, :r)
+        WHERE dojo_id = :dojoId AND id = :paymentId`, { paymentId, r: `Reembolsado: ${req.valid.body.reason}` });
+    await auditReq(req, t.executor, { action: 'refund', entity: 'payment', entityId: paymentId, before: reversed, after: { ...req.valid.body, voided: feeCharges } });
+  });
+  res.json({ status: 'success', data: await loadPayment(req.tdb, paymentId) });
+});
+
 // Aplicar el saldo a favor de un pago a cargos nuevos
 payments.post('/:id/allocate', requireRole(...STAFF), validate({
   params: z.object({ id }), body: z.object({ allocations: z.array(z.object({ charge_id: id, amount: money })).optional() }),
