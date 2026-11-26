@@ -356,8 +356,11 @@ describe('respaldos', () => {
     env.BACKUP_DIR = realDir;
     assert.equal(b.status, 'failed');
     assert.ok(b.error);
-    await new Promise((r) => setTimeout(r, 50));
-    assert.ok(outbox.some((m) => m.to === 'admin@seikoukan.mx' && /respaldo/i.test(m.vars.body)));
+    await new Promise((r) => setTimeout(r, 300));
+    // Alerta de monitoreo (sin correos configurados → a los superadmins)
+    assert.ok(outbox.some((m) => m.template === 'platform_alert' && m.to === 'admin@seikoukan.mx' && /respaldo/i.test(m.vars.detail)));
+    const [[a]] = await pool.query("SELECT * FROM platform_alerts WHERE kind = 'backup' AND resolved_at IS NULL");
+    assert.equal(a.severity, 'critical');
   });
 });
 

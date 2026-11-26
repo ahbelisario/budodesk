@@ -204,6 +204,33 @@ dinero llega directo a su cuenta.
 - Empieza en **Prueba** y pasa a **Real** cuando todo funcione. Para probar en
   Real, haz un pago chico y reembólsalo desde el panel del proveedor.
 
+## Monitoreo y alertas
+
+En **Plataforma → Monitoreo** se configura a dónde llegan las alertas:
+
+- **Correos:** uno o varios, separados por coma. Si lo dejas vacío, llegan a los
+  superadmins.
+- **Push:** también a los superadmins que activaron las notificaciones en su
+  celular (Perfil → Cuenta → Notificaciones). Llega aunque el correo no funcione.
+- **Alerta de prueba:** el botón «Mandar alerta de prueba» confirma que llegan.
+
+Qué se vigila (cada 10 minutos, y al momento en los respaldos y las tareas):
+
+- respaldos y copia a S3 que fallan, o más de 48 h sin un respaldo bueno;
+- avisos de pago (webhooks) de PayPal o Mercado Pago con error;
+- envío de correo (SMTP): esa alerta llega por push;
+- tareas automáticas (cobro, clases, recordatorios, pruebas gratis…);
+- espacio en disco de respaldos y archivos (umbral configurable).
+
+Una alerta abierta no se repite: se cuenta y se recuerda una vez al día. Se
+cierra sola cuando el problema desaparece, o a mano desde el panel.
+
+**Servidor caído:** el propio servidor no puede avisar que está caído. Para eso
+está la **dirección de latido**: crea un «check» en un servicio externo (por
+ejemplo Healthchecks.io o UptimeRobot, modo heartbeat/push), pega su URL en
+Monitoreo y el servidor la llamará cada 5 minutos. Si las llamadas se detienen,
+ese servicio te avisa por su cuenta.
+
 ## Registro de dojos nuevos (prueba gratis)
 
 Cualquier dojo puede pedir su cuenta en `https://budodesk.com/signup` (también

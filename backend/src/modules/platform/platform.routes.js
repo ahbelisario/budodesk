@@ -5,6 +5,10 @@
  *   POST   /dojos                 alta de dojo (+ dueño, + copiar configuración)
  *   PATCH  /dojos/:id             nombre, plan, estado, fin de prueba
  *   DELETE /dojos/:id             elimina el dojo y sus datos (solo cancelados; body { confirm_slug })
+ *   GET    /monitoring            ajustes, estado y alertas (?status=open|resolved|all)
+ *   PUT    /monitoring/settings   correos de alerta, push, latido, umbral de disco
+ *   POST   /monitoring/test       manda una alerta de prueba
+ *   POST   /monitoring/alerts/:id/resolve
  *   GET    /signups               solicitudes de registro (?status=pending|approved|rejected|all) + ajustes
  *   PUT    /signups/settings      aceptar registros, días de prueba
  *   POST   /signups/:id/approve   crea el dojo en prueba y avisa al dueño
@@ -25,6 +29,7 @@ const { audit } = require('../../utils/audit');
 const dojos = require('./dojos.service');
 const backups = require('./backups.service');
 const signups = require('../signup/signup.service');
+const monitor = require('./monitor.service');
 
 const router = express.Router();
 const id = z.coerce.number().int().positive();
@@ -100,6 +105,35 @@ router.delete('/dojos/:id', validate({ params: z.object({ id }), body: z.object(
   async (req, res) => {
     res.json({ status: 'success', data: await dojos.deleteDojo(req.valid.params.id, req.valid.body, req.auth, req.ip) });
   });
+
+// ===========================================================================
+// Monitoreo
+// ===========================================================================
+router.get('/monitoring', validate({ query: z.object({ status: z.enum(['open', 'resolved', 'all']).default('all') }) }), async (req, res) => {
+  const [settings, status, alerts] = await Promise.all([
+    monitor.getSettings(), monitor.status(), monitor.listAlerts({ status: req.valid.query.status })]);
+  res.json({ status: 'success', data: { settings, status, alerts } });
+});
+
+router.put('/monitoring/settings', validate({
+  body: z.object({
+    alerts_emails: z.string().max(1000).optional(),
+    alerts_push: z.boolean().optional(),
+    heartbeat_url: z.string().trim().max(500).nullable().optional(),
+    disk_alert_pct: z.coerce.number().int().min(1).max(50).optional(),
+  }),
+}), async (req, res) => {
+  res.json({ status: 'success', data: await monitor.updateSettings(req.valid.body, req.auth.userId) });
+});
+
+router.post('/monitoring/test', async (req, res) => {
+  res.json({ status: 'success', data: await monitor.sendTest(req.auth.userId) });
+});
+
+router.post('/monitoring/alerts/:id/resolve', validate({ params: z.object({ id }) }), async (req, res) => {
+  await monitor.resolveById(req.valid.params.id, req.auth.userId);
+  res.json({ status: 'success', data: { id: req.valid.params.id } });
+});
 
 // ===========================================================================
 // Solicitudes de registro

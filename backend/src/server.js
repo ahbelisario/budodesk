@@ -16,6 +16,7 @@ async function main() {
   if (env.BILLING_SCHEDULER) require('./jobs/scheduler').start();
   // Respaldos programados (si corres varias réplicas, déjalo activo solo en una)
   if (env.BACKUP_SCHEDULER) require('./modules/platform/backups.service').startScheduler();
+  if (env.BILLING_SCHEDULER) require('./modules/platform/monitor.service').startScheduler();
 
   const shutdown = (signal) => {
     console.log(`${signal} recibido, cerrando…`);

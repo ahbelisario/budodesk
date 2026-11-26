@@ -14,7 +14,6 @@ const jwt = require('jsonwebtoken');
 const tar = require('tar');
 const env = require('../../config/env');
 const { pool, one } = require('../../db/pool');
-const { sendMail } = require('../../services/mailer');
 const { AppError, badRequest, conflict, notFound } = require('../../utils/errors');
 const { dumpDatabase } = require('./dump');
 const cipher = require('./crypto');
@@ -23,6 +22,7 @@ const s3 = require('./s3');
 const STALE_MINUTES = 120;
 const LINK_SECONDS = 300;
 const dir = () => path.resolve(env.BACKUP_DIR);
+const monitor = () => require('./monitor.service'); // perezoso: evita el ciclo de require
 const uploadsDir = () => path.resolve(env.UPLOAD_DIR);
 
 let current = null; // respaldo en curso en este proceso
@@ -268,6 +268,8 @@ async function work(id, filename, settings) {
       `UPDATE backups SET status = 'ok', finished_at = NOW(), size_bytes = :size, sha256 = :sha,
               tables_count = :tables, rows_count = :rows, files_count = :files WHERE id = :id`,
       { id, size, sha, tables: stats.tables, rows: stats.rows, files });
+    monitor().resolve('backup');
+    monitor().resolve('backup_stale');
 
     // 4) Copia a S3 (si está activa)
     if (settings.s3_enabled && cipher.hasKey()) await uploadToS3(id, final, filename, settings);
@@ -282,7 +284,8 @@ async function work(id, filename, settings) {
       `UPDATE backups SET status = 'failed', finished_at = NOW(), error = :err WHERE id = :id`,
       { id, err: String(e.message || e).slice(0, 990) }).catch(() => {});
     await fsp.rm(partial, { force: true }).catch(() => {});
-    notifyFailure(`El respaldo ${filename} falló: ${e.message || e}`);
+    monitor().raise({ kind: 'backup', severity: 'critical', url: '/platform?tab=backups',
+      title: 'Falló un respaldo', detail: `El respaldo ${filename} falló: ${e.message || e}` });
     console.error('[respaldos] error:', e.message);
   } finally {
     await fsp.rm(tmp, { recursive: true, force: true }).catch(() => {});
@@ -299,11 +302,13 @@ async function uploadToS3(id, file, filename, settings) {
     await cipher.encryptFile(file, enc);
     await s3.upload(cfg, key, enc);
     await pool.query(`UPDATE backups SET s3_status = 'ok', s3_uploaded_at = NOW() WHERE id = :id`, { id });
+    monitor().resolve('s3');
     await rotateS3(settings);
   } catch (e) {
     const msg = s3.describe(e);
     await pool.query(`UPDATE backups SET s3_status = 'failed', s3_error = :msg WHERE id = :id`, { id, msg });
-    notifyFailure(`La copia de ${filename} a S3 falló: ${msg}`);
+    monitor().raise({ kind: 's3', url: '/platform?tab=backups',
+      title: 'Falló la copia del respaldo a S3', detail: `La copia de ${filename} a S3 falló: ${msg}` });
   } finally {
     await fsp.rm(enc, { force: true }).catch(() => {});
   }
@@ -332,25 +337,6 @@ async function rotateS3(settings) {
     } catch (e) {
       console.error('[respaldos] no se pudo borrar de S3:', s3.describe(e));
     }
-  }
-}
-
-async function notifyFailure(message) {
-  try {
-    const [admins] = await pool.query(
-      `SELECT u.email, COALESCE(s.language, 'es') AS lang FROM users u LEFT JOIN user_settings s ON s.user_id = u.id
-        WHERE u.is_superadmin = 1 AND u.status = 'active' AND u.deleted_at IS NULL AND u.email IS NOT NULL`);
-    for (const a of admins) {
-      await sendMail('notification', {
-        to: a.email, lang: a.lang,
-        vars: {
-          dojo: 'BudoDesk', title: a.lang === 'en' ? 'Backup failed' : 'Falló un respaldo',
-          body: message, url: `${env.APP_BASE_URL}/platform?tab=backups`,
-        },
-      });
-    }
-  } catch (e) {
-    console.error('[respaldos] no se pudo avisar por correo:', e.message);
   }
 }
 

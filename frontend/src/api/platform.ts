@@ -43,7 +43,27 @@ export type Backup = {
 
 export type SettingsPatch = Partial<Omit<BackupSettings, 's3_has_secret' | 'encryption_available' | 'next_run' | 'updated_at'>> & { s3_secret?: string | null };
 
+export type MonitorSettings = { alerts_emails: string[]; alerts_push: boolean; heartbeat_url: string | null; disk_alert_pct: number };
+export type DiskInfo = { path: string; total?: number; free?: number; free_pct?: number | null; error?: string };
+export type MonitorStatus = {
+  version: string; started_at: string; open_alerts: number; last_sweep: string | null; smtp_configured: boolean;
+  heartbeat: { at: string | null; ok: boolean | null; error: string | null };
+  disks: { backups: DiskInfo; uploads: DiskInfo };
+  last_backup: { finished_at: string | null; status: 'ok' | 'failed' } | null;
+};
+export type PlatformAlert = {
+  id: number; kind: string; alert_key: string; severity: 'warning' | 'critical'; title: string; detail: string | null;
+  url: string | null; count: number; first_at: string; last_at: string; notified_at: string | null; notify_error: string | null;
+  resolved_at: string | null; resolved_by: number | null; resolved_by_name: string | null;
+};
+
 export const platformApi = {
+  monitoring: (status: 'open' | 'resolved' | 'all' = 'all') =>
+    api.get<{ settings: MonitorSettings; status: MonitorStatus; alerts: PlatformAlert[] }>('/platform/monitoring', { status }),
+  saveMonitoring: (b: { alerts_emails?: string; alerts_push?: boolean; heartbeat_url?: string | null; disk_alert_pct?: number }) =>
+    api.put<MonitorSettings>('/platform/monitoring/settings', b),
+  testAlert: () => api.post<{ ok: boolean; error: string | null }>('/platform/monitoring/test', {}),
+  resolveAlert: (id: number) => api.post<{ id: number }>(`/platform/monitoring/alerts/${id}/resolve`, {}),
   dojos: () => api.get<PlatformDojo[]>('/platform/dojos'),
   createDojo: (b: NewDojo) => api.post<CreatedDojo>('/platform/dojos', b),
   updateDojo: (id: number, b: Partial<Pick<PlatformDojo, 'name' | 'short_name' | 'plan' | 'status' | 'trial_ends_at'>>) =>

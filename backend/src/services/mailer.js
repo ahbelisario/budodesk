@@ -23,6 +23,7 @@ const T = {
     account_access: { subject: 'Tu acceso a {dojo}', title: 'Bienvenido a {dojo}', body: 'Hola {name}, ya tienes cuenta en {dojo}. Crea tu contraseña para entrar a la app y ver tus clases, pagos y grados.', button: 'Crear mi contraseña', note: 'El enlace vence en 7 días.' },
     password_changed: { subject: 'Tu contraseña cambió · {dojo}', title: 'Contraseña actualizada', body: 'Hola {name}, tu contraseña se cambió correctamente. Si no fuiste tú, contacta a tu dojo de inmediato.', button: 'Iniciar sesión', note: '' },
     notification: { subject: '{title} · {dojo}', title: '{title}', body: '{body}', button: 'Abrir BudoDesk', note: '' },
+    platform_alert: { subject: '[BudoDesk] {title}', title: '{title}', body: '{detail}', button: 'Abrir el panel', note: 'Alerta del monitoreo de BudoDesk. Los correos que la reciben se configuran en Plataforma → Monitoreo.' },
     signup_received: { subject: 'Recibimos tu solicitud · BudoDesk', title: 'Gracias por registrar {dojo_name}', body: 'Hola {name}, recibimos tu solicitud para usar BudoDesk en {dojo_name}. La revisaremos y te escribiremos a este correo en cuanto tu dojo esté listo.', button: '', note: '' },
     signup_new: { subject: 'Nueva solicitud de dojo: {dojo_name}', title: 'Nueva solicitud de registro', body: '{name} ({email}) quiere registrar {dojo_name} con la dirección «{slug}».', button: 'Revisar solicitudes', note: '' },
     signup_approved_new: { subject: '{dojo_name} ya está en BudoDesk', title: '¡Tu dojo está listo!', body: 'Hola {name}, aprobamos {dojo_name}. Tienes {days} días de prueba gratis, hasta el {ends}. Crea tu contraseña para entrar. La dirección de tu dojo es {address}', button: 'Crear mi contraseña', note: 'El enlace vence en 7 días. Si vence, usa «¿Olvidaste tu contraseña?» en la pantalla de entrada.' },
@@ -40,6 +41,7 @@ const T = {
     account_access: { subject: 'Your access to {dojo}', title: 'Welcome to {dojo}', body: 'Hi {name}, you now have an account at {dojo}. Create your password to see your classes, payments and ranks.', button: 'Create my password', note: 'This link expires in 7 days.' },
     password_changed: { subject: 'Your password changed · {dojo}', title: 'Password updated', body: "Hi {name}, your password was changed. If it wasn't you, contact your dojo right away.", button: 'Sign in', note: '' },
     notification: { subject: '{title} · {dojo}', title: '{title}', body: '{body}', button: 'Open BudoDesk', note: '' },
+    platform_alert: { subject: '[BudoDesk] {title}', title: '{title}', body: '{detail}', button: 'Open the panel', note: 'BudoDesk monitoring alert. Recipients are set in Platform → Monitoring.' },
     signup_received: { subject: 'We received your request · BudoDesk', title: 'Thanks for registering {dojo_name}', body: "Hi {name}, we received your request to use BudoDesk at {dojo_name}. We'll review it and email you as soon as your dojo is ready.", button: '', note: '' },
     signup_new: { subject: 'New dojo request: {dojo_name}', title: 'New sign-up request', body: '{name} ({email}) wants to register {dojo_name} at «{slug}».', button: 'Review requests', note: '' },
     signup_approved_new: { subject: '{dojo_name} is now on BudoDesk', title: 'Your dojo is ready!', body: 'Hi {name}, we approved {dojo_name}. You have a {days}-day free trial, until {ends}. Create your password to sign in. Your dojo address is {address}', button: 'Create my password', note: 'This link expires in 7 days. If it does, use "Forgot your password?" on the sign-in screen.' },
@@ -80,20 +82,35 @@ function render(template, lang, vars) {
  * sendMail('password_reset', { to, lang, vars: { name, dojo, url, color } })
  * Nunca lanza: un fallo de correo no debe tumbar la operación principal.
  */
+// Monitoreo: se le avisa cuando un envío falla, y una vez cuando vuelve a funcionar
+let failureHook = null;
+let failing = false;
+function setFailureHook(fn) { failureHook = fn; }
+/** Solo pruebas: simula que el SMTP falla */
+let forceError = null;
+function _setForceError(msg) { forceError = msg; }
+
 async function sendMail(template, { to, lang = 'es', vars }) {
   if (!to) return { skipped: true };
   try {
     const { subject, html } = render(template, lang, vars);
+    if (forceError) throw new Error(forceError);
     const info = await transporter.sendMail({ from: env.MAIL_FROM, to, subject, html });
     if (!env.SMTP_HOST || env.NODE_ENV === 'test') {
       outbox.push({ template, to, subject, vars });
       if (env.NODE_ENV === 'development') console.log(`[mail:${template}] → ${to} ${vars.url || ''}`);
     }
+    if (failing && template !== 'platform_alert') {
+      failing = false;
+      try { failureHook?.({ template, to, ok: true }); } catch { /* sin efecto */ }
+    }
     return { sent: true, id: info.messageId };
   } catch (err) {
     console.error(`[mail:${template}] error enviando a ${to}:`, err.message);
+    if (template !== 'platform_alert') failing = true;
+    try { failureHook?.({ template, to, error: err.message, ok: false }); } catch { /* sin efecto */ }
     return { sent: false, error: err.message };
   }
 }
 
-module.exports = { sendMail, outbox };
+module.exports = { sendMail, outbox, setFailureHook, _setForceError };
