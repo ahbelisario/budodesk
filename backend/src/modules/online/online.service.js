@@ -352,34 +352,38 @@ async function paypalWebhook(dojoId, mode, headers, event) {
   return { ok: true };
 }
 
+/**
+ * Avisos de Mercado Pago. No se confía en su contenido: solo se toma el número de pago u orden
+ * y se consulta directo a Mercado Pago con las credenciales del dojo (que solo ven pagos propios);
+ * `complete()` además revisa que el monto coincida. Por eso también se procesan los avisos IPN,
+ * que no traen la firma x-signature; la firma solo queda registrada (verified).
+ */
 async function mercadopagoWebhook(dojoId, mode, { headers, query, body }) {
   const s = await loadSettings(dojoId);
   const cfg = providerConfig(s, 'mercadopago', mode || activeMode(s, 'mercadopago'));
-  const dataId = query['data.id'] ?? body?.data?.id;
-  const type = query.type ?? body?.type ?? body?.topic ?? '?';
+  const n = mercadopago.parseNotification(query, body);
   const verified = mercadopago.verifyWebhook(cfg.webhookSecret, {
-    signature: headers['x-signature'], requestId: headers['x-request-id'], dataId,
+    signature: headers['x-signature'], requestId: headers['x-request-id'], dataId: n.dataId,
   });
-  const eventRow = await saveEvent(dojoId, 'mercadopago', `${type}:${dataId}:${headers['x-request-id'] || ''}`, type, { query, body }, verified);
+  const eventRow = await saveEvent(dojoId, 'mercadopago', `${n.rawType}:${n.id}:${headers['x-request-id'] || ''}`, n.rawType, { query, body }, verified);
   if (!eventRow) return { duplicate: true };
-  if (!verified) { await markEvent(eventRow, 'Firma no verificada'); return { verified: false }; }
   try {
-    if (type === 'payment' && dataId) {
-      // Se consulta el pago directo a Mercado Pago: no se confía en el contenido del aviso
-      const p = await mercadopago.getPayment(cfg, dataId);
-      const checkoutId = Number(p.externalRef);
-      if (checkoutId) {
-        const [[c]] = await pool.query(
-          "SELECT id FROM online_checkouts WHERE dojo_id = :dojoId AND provider = 'mercadopago' AND id = :id", { dojoId, id: checkoutId });
-        if (c) await confirm(dojoId, c.id);
-      }
+    let ref = null;
+    if (n.kind === 'payment' && n.id) ref = (await mercadopago.getPayment(cfg, n.id)).externalRef;
+    if (n.kind === 'merchant_order' && n.id) ref = (await mercadopago.getMerchantOrder(cfg, n.id)).externalRef;
+    const checkoutId = Number(ref);
+    if (checkoutId) {
+      const [[c]] = await pool.query(
+        "SELECT id FROM online_checkouts WHERE dojo_id = :dojoId AND provider = 'mercadopago' AND id = :id", { dojoId, id: checkoutId });
+      if (c) await confirm(dojoId, c.id);
     }
     await markEvent(eventRow);
   } catch (e) {
     await markEvent(eventRow, e.message);
+    if (e.status === 404) return { ok: false, verified }; // no es de esta cuenta (o es falso): no reintentar
     throw e;
   }
-  return { ok: true };
+  return { ok: true, verified };
 }
 
 /** Intentos abandonados → expired (lo corre el programador cada hora) */

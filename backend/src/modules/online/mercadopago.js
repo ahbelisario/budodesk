@@ -79,6 +79,28 @@ async function getPayment(cfg, paymentId) {
   return summarize(await call(cfg, `/v1/payments/${encodeURIComponent(paymentId)}`));
 }
 
+/** Orden comercial (agrupa los pagos de una preferencia): { orderId, externalRef } */
+async function getMerchantOrder(cfg, orderId) {
+  const o = await call(cfg, `/merchant_orders/${encodeURIComponent(orderId)}`);
+  return { orderId: o?.id != null ? String(o.id) : null, externalRef: o?.external_reference ?? null };
+}
+
+/**
+ * Normaliza un aviso de Mercado Pago. Llegan en dos formatos a la misma dirección:
+ *   - Webhooks (firmados con x-signature): ?data.id=…&type=payment | topic_merchant_order_wh, cuerpo { type, data: { id } }
+ *   - IPN (sin esa firma): ?id=…&topic=payment | merchant_order, cuerpo { topic, resource }
+ * Devuelve { kind: 'payment'|'merchant_order'|null, id, rawType, dataId }.
+ */
+function parseNotification(query = {}, body = {}) {
+  const rawType = String(query.type ?? query.topic ?? body?.type ?? body?.topic ?? '?');
+  const dataId = query['data.id'] ?? body?.data?.id ?? null; // el id con el que se firma
+  let id = dataId ?? query.id ?? null;
+  if (!id && typeof body?.resource === 'string') id = body.resource.split('/').filter(Boolean).pop();
+  const kind = rawType === 'payment' ? 'payment'
+    : ['merchant_order', 'topic_merchant_order_wh'].includes(rawType) ? 'merchant_order' : null;
+  return { kind, id: id != null ? String(id) : null, rawType, dataId: dataId != null ? String(dataId) : null };
+}
+
 /** Pagos de un intento (por external_reference), el más reciente primero */
 async function findPayments(cfg, externalRef) {
   const r = await call(cfg, `/v1/payments/search?external_reference=${encodeURIComponent(externalRef)}&sort=date_created&criteria=desc`);
@@ -106,4 +128,4 @@ function verifyWebhook(secret, { signature, requestId, dataId }) {
   }
 }
 
-module.exports = { test, createPreference, getPayment, findPayments, verifyWebhook, ProviderError };
+module.exports = { test, createPreference, getPayment, getMerchantOrder, findPayments, parseNotification, verifyWebhook, ProviderError };

@@ -12,7 +12,7 @@ process.env.BACKUP_ENCRYPTION_KEY = 'llave-de-prueba-llave-de-prueba-1234567';
 // ---------------------------------------------------------------------------
 // Proveedores simulados
 // ---------------------------------------------------------------------------
-const fake = { orders: new Map(), mpPayments: [], prefs: new Map(), seq: 0 };
+const fake = { orders: new Map(), mpPayments: [], mpOrders: new Map(), prefs: new Map(), seq: 0 };
 function fakeServer() {
   const app = express();
   app.use(express.json());
@@ -63,6 +63,10 @@ function fakeServer() {
   });
   app.get('/v1/payments/search', mpAuth, (req, res) => {
     res.json({ results: fake.mpPayments.filter((p) => p.external_reference === req.query.external_reference).reverse() });
+  });
+  app.get('/merchant_orders/:id', mpAuth, (req, res) => {
+    const ext = fake.mpOrders.get(req.params.id);
+    return ext ? res.json({ id: Number(req.params.id), external_reference: ext, status: 'closed' }) : res.status(404).json({ message: 'not found' });
   });
   app.get('/v1/payments/:id', mpAuth, (req, res) => {
     const p = fake.mpPayments.find((x) => String(x.id) === req.params.id);
@@ -315,19 +319,63 @@ describe('Mercado Pago', () => {
     assert.equal((await chargeRow(c)).status, 'pending');
   });
 
+  test('aviso falso o de otra cuenta: no cambia nada', async () => {
+    const r = await request(app).post('/api/v2/online-payments/webhooks/mercadopago/1/test?data.id=123456&type=payment')
+      .set({ 'x-signature': mpSignature('otro-secreto', '123456', 'req-0'), 'x-request-id': 'req-0' }).send({ type: 'payment', data: { id: '123456' } });
+    assert.equal(r.status, 200);
+    assert.equal((await chargeRow(c)).status, 'pending');
+    const [[ev]] = await pool.query("SELECT verified, error FROM payment_webhook_events WHERE provider = 'mercadopago' ORDER BY id DESC LIMIT 1");
+    assert.equal(ev.verified, 0);
+    assert.match(ev.error, /Mercado Pago/);
+  });
+
   test('cuando se acredita, el aviso (webhook) firmado lo registra', async () => {
     const p = mpPay(co.checkout_id, 'approved', 750);
-    const bad = await request(app).post(`/api/v2/online-payments/webhooks/mercadopago/1/test?data.id=${p.id}&type=payment`)
-      .set({ 'x-signature': mpSignature('otro-secreto', p.id, 'req-1'), 'x-request-id': 'req-1' }).send({ type: 'payment', data: { id: String(p.id) } });
-    assert.equal(bad.status, 400);
-    assert.equal((await chargeRow(c)).status, 'pending');
     const good = await request(app).post(`/api/v2/online-payments/webhooks/mercadopago/1/test?data.id=${p.id}&type=payment`)
       .set({ 'x-signature': mpSignature(SECRET, p.id, 'req-2'), 'x-request-id': 'req-2' }).send({ type: 'payment', data: { id: String(p.id) } });
     assert.equal(good.status, 200);
     assert.equal((await chargeRow(c)).status, 'paid');
+    const [[ev]] = await pool.query("SELECT verified, error FROM payment_webhook_events WHERE provider = 'mercadopago' ORDER BY id DESC LIMIT 1");
+    assert.equal(ev.verified, 1);
+    assert.equal(ev.error, null);
     const [[pay]] = await pool.query("SELECT method, provider_fee, amount FROM payments WHERE provider = 'mercadopago' ORDER BY id DESC LIMIT 1");
     assert.equal(pay.method, 'mercadopago');
     assert.equal(Number(pay.provider_fee), 40.5);
+  });
+
+  test('avisos IPN sin firma (pago y orden comercial) también registran el pago', async () => {
+    // IPN de pago: ?id=…&topic=payment
+    const c3 = await charge(320);
+    const co3 = ok(await api('post', '/online-payments/checkout', T.student, { provider: 'mercadopago', charge_ids: [c3] }), 201);
+    const p3 = mpPay(co3.checkout_id, 'approved', 320);
+    const r3 = await request(app).post(`/api/v2/online-payments/webhooks/mercadopago/1/test?id=${p3.id}&topic=payment`)
+      .set({ 'x-request-id': 'ipn-1' }).send({ topic: 'payment', resource: String(p3.id) });
+    assert.equal(r3.status, 200);
+    assert.equal((await chargeRow(c3)).status, 'paid');
+    // IPN de orden comercial: ?id=…&topic=merchant_order, resource con la URL
+    const c4 = await charge(330);
+    const co4 = ok(await api('post', '/online-payments/checkout', T.student, { provider: 'mercadopago', charge_ids: [c4] }), 201);
+    mpPay(co4.checkout_id, 'approved', 330);
+    fake.mpOrders.set('777001', String(co4.checkout_id));
+    const r4 = await request(app).post('/api/v2/online-payments/webhooks/mercadopago/1/test?id=777001&topic=merchant_order')
+      .set({ 'x-request-id': 'ipn-2' }).send({ topic: 'merchant_order', resource: 'https://api.mercadolibre.com/merchant_orders/777001' });
+    assert.equal(r4.status, 200);
+    assert.equal((await chargeRow(c4)).status, 'paid');
+    const [evs] = await pool.query("SELECT event_type, event_id, verified, error FROM payment_webhook_events WHERE provider = 'mercadopago' ORDER BY id DESC LIMIT 2");
+    assert.deepEqual(evs.map((e) => [e.event_type, e.verified, e.error]), [['merchant_order', 0, null], ['payment', 0, null]]);
+    assert.doesNotMatch(evs[0].event_id, /undefined/);
+  });
+
+  test('webhook firmado de orden comercial (topic_merchant_order_wh)', async () => {
+    const c5 = await charge(340);
+    const co5 = ok(await api('post', '/online-payments/checkout', T.student, { provider: 'mercadopago', charge_ids: [c5] }), 201);
+    mpPay(co5.checkout_id, 'approved', 340);
+    fake.mpOrders.set('777002', String(co5.checkout_id));
+    const r5 = await request(app).post('/api/v2/online-payments/webhooks/mercadopago/1/test?data.id=777002&type=topic_merchant_order_wh')
+      .set({ 'x-signature': mpSignature(SECRET, '777002', 'req-5'), 'x-request-id': 'req-5' })
+      .send({ id: '777002', type: 'topic_merchant_order_wh', action: 'update', status: 'closed' });
+    assert.equal(r5.status, 200);
+    assert.equal((await chargeRow(c5)).status, 'paid');
   });
 
   test('monto alterado: no se registra y queda para revisión', async () => {

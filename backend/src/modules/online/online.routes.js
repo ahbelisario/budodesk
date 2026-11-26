@@ -37,8 +37,8 @@ async function paypalHook(req, res) {
 async function mercadopagoHook(req, res) {
   try {
     const { dojoId, mode } = req.valid.params;
-    const r = await svc.mercadopagoWebhook(dojoId, mode, { headers: req.headers, query: req.query, body: req.body });
-    res.status(r.verified === false ? 400 : 200).json({ received: true });
+    await svc.mercadopagoWebhook(dojoId, mode, { headers: req.headers, query: req.query, body: req.body });
+    res.status(200).json({ received: true }); // con o sin firma: lo que cuenta es lo que responde Mercado Pago
   } catch (e) {
     console.error('[pagos] aviso Mercado Pago:', e.message);
     res.status(500).json({ received: false });
