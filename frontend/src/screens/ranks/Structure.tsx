@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ranksApi, type DisciplineFull, type RankFull, type RankKind, type Track } from '../../api/ranks';
+import { ranksApi, type DisciplineFull, type RankFull, type RankKind, type RankTemplate, type Track } from '../../api/ranks';
 import type { DisplayStyle } from '../../api/types';
 import { ApiError } from '../../api/client';
 import { useSession } from '../../session/SessionProvider';
@@ -83,6 +83,80 @@ function TrackDialog({ visible, disciplineId, track, onClose, onSaved }: { visib
         options={[{ value: 'rank', label: rt('style_rank') }, { value: 'belt', label: rt('style_belt') }]} />
       <Text variant="small" color={palette.ink2}>{rt('styleHint')}</Text>
       {track ? <SwitchRow label={rt('f_active')} value={active} onChange={setActive} /> : null}
+      {err ? <Notice tone="danger">{err}</Notice> : null}
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Plantillas precargadas (kendo, judo, BJJ…)
+function TemplateDialog({ visible, disciplines, onClose, onSaved }: { visible: boolean; disciplines: DisciplineFull[]; onClose: () => void; onSaved: (ranks: number) => void }) {
+  const list = useApi(() => ranksApi.templates(), [], { enabled: visible });
+  const [key, setKey] = useState<string | null>(null);
+  const [target, setTarget] = useState<number>(0); // 0 = disciplina nueva
+  const [name, setName] = useState('');
+  const [picked, setPicked] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  const tpl: RankTemplate | undefined = (list.data ?? []).find((x) => x.key === key);
+  useEffect(() => { if (visible) { setKey(null); setTarget(0); setErr(null); } }, [visible]);
+  useEffect(() => { if (tpl) { setName(tpl.name); setPicked(tpl.tracks.map((x) => x.name)); } }, [tpl?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function save() {
+    if (!tpl) return;
+    if (!picked.length) { setErr(rt('tplNoTrack')); return; }
+    setBusy(true); setErr(null);
+    try {
+      const r = await ranksApi.applyTemplate(tpl.key, target ? { discipline_id: target, tracks: picked } : { name: name.trim() || tpl.name, tracks: picked });
+      onSaved(r.ranks);
+    } catch (x) { setErr(errorMessage(x)); } finally { setBusy(false); }
+  }
+
+  const meta = (r: RankTemplate['tracks'][number]['ranks'][number]) => [
+    r.min_months != null ? rt('tplMonths', { n: r.min_months }) : null,
+    r.min_classes != null ? rt('tplClasses', { n: r.min_classes }) : null,
+    r.min_age != null ? rt('tplAge', { n: r.min_age }) : null,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <Dialog visible={visible} onClose={onClose} title={rt('tplTitle')} wide
+      actions={<>{cancelBtn(onClose)}<Button label={rt('tplCreate')} loading={busy} disabled={!tpl} onPress={save} /></>}>
+      <Text variant="small" color={palette.ink2}>{rt('tplIntro')}</Text>
+      {list.loading ? <Loading /> : (
+        <Select label={rt('tplPick')} value={key} onChange={setKey}
+          options={(list.data ?? []).map((x) => ({ value: x.key, label: x.style ? `${x.name} · ${x.style}` : x.name }))} />
+      )}
+      {tpl ? (
+        <View style={{ gap: space.sm }}>
+          <Text variant="small" color={palette.ink2}>{tpl.org} — {rt('tplSource', { source: tpl.source })}</Text>
+          <View style={{ gap: 4, backgroundColor: palette.sunken, borderRadius: radius.md, padding: space.sm }}>
+            {tpl.notes.map((n, i) => <Text key={i} variant="small">• {n}</Text>)}
+          </View>
+          <FormGrid>
+            <Select label={rt('tplTarget')} value={target} onChange={(v) => setTarget(v ?? 0)}
+              options={[{ value: 0, label: rt('tplNew') }, ...disciplines.filter((d) => d.active).map((d) => ({ value: d.id, label: rt('tplInto', { name: d.name }) }))]} />
+            {target === 0 ? <Field label={rt('tplName')} value={name} onChangeText={setName} /> : <View />}
+          </FormGrid>
+          <Text variant="smallStrong">{rt('tplTracks')}</Text>
+          {tpl.tracks.map((tr) => {
+            const on = picked.includes(tr.name);
+            const ages = ageRange(tr.min_age, tr.max_age);
+            return (
+              <View key={tr.name} style={{ gap: 4, borderWidth: 1, borderColor: palette.lineSoft, borderRadius: radius.md, padding: space.sm }}>
+                <SwitchRow label={`${tr.name} · ${rt('tplRanks', { count: tr.ranks.length })}${ages ? ` · ${ages}` : ''}`}
+                  value={on} onChange={(v) => setPicked((p) => (v ? [...p, tr.name] : p.filter((x) => x !== tr.name)))} />
+                {on ? tr.ranks.map((r) => (
+                  <View key={r.name} style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' }}>
+                    <RankView name={r.name} color={r.color} stripeColor={r.stripe_color} style={tr.display_style} size="sm" />
+                    <View style={{ flex: 1 }} />
+                    <Text variant="small" color={palette.ink2}>{meta(r)}</Text>
+                  </View>
+                )) : null}
+              </View>
+            );
+          })}
+          <Text variant="small" color={palette.ink2}>{rt('tplUnverified')}</Text>
+        </View>
+      ) : null}
       {err ? <Notice tone="danger">{err}</Notice> : null}
     </Dialog>
   );
@@ -205,6 +279,7 @@ export function StructureTab() {
   const [discDlg, setDiscDlg] = useState<{ open: boolean; d: DisciplineFull | null }>({ open: false, d: null });
   const [trackDlg, setTrackDlg] = useState<{ open: boolean; disc: number; track: Track | null }>({ open: false, disc: 0, track: null });
   const [rankDlg, setRankDlg] = useState<{ open: boolean; track: Track | null; rank: RankFull | null }>({ open: false, track: null, rank: null });
+  const [tplDlg, setTplDlg] = useState(false);
   const saved = () => { setMsg({ tone: 'success', text: rt('saved') }); data.reload(); };
 
   async function move(track: Track, i: number, dir: -1 | 1) {
@@ -219,6 +294,7 @@ export function StructureTab() {
       <Text variant="small" color={palette.ink2}>{rt('structureIntro')}</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap' }}>
         {admin ? <View style={{ flex: 1, minWidth: 220, maxWidth: 320 }}><SwitchRow label={rt('showInactive')} value={showInactive} onChange={setShowInactive} /></View> : <View style={{ flex: 1 }} />}
+        {admin ? <Button label={rt('fromTemplate')} icon="award" variant="secondary" onPress={() => setTplDlg(true)} /> : null}
         {admin ? <Button label={rt('newDiscipline')} icon="plus" onPress={() => setDiscDlg({ open: true, d: null })} /> : null}
       </View>
       {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
@@ -268,6 +344,8 @@ export function StructureTab() {
 
       <DisciplineDialog visible={discDlg.open} d={discDlg.d} onClose={() => setDiscDlg({ open: false, d: null })} onSaved={() => { setDiscDlg({ open: false, d: null }); saved(); }} />
       <TrackDialog visible={trackDlg.open} disciplineId={trackDlg.disc} track={trackDlg.track} onClose={() => setTrackDlg({ ...trackDlg, open: false })} onSaved={() => { setTrackDlg({ ...trackDlg, open: false }); saved(); }} />
+      <TemplateDialog visible={tplDlg} disciplines={data.data ?? []} onClose={() => setTplDlg(false)}
+        onSaved={(n) => { setTplDlg(false); setMsg({ tone: 'success', text: rt('tplDone', { ranks: n }) }); data.reload(); }} />
       <RankDialog visible={rankDlg.open} track={rankDlg.track} rank={rankDlg.rank} onClose={() => setRankDlg({ ...rankDlg, open: false })} onSaved={() => { setRankDlg({ ...rankDlg, open: false }); saved(); }} />
     </View>
   );

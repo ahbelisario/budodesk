@@ -8,8 +8,10 @@ async function memberProgress(tdb, userId) {
             v.stripes, v.since_date, v.next_exam_date, v.months_in_rank, v.classes_in_rank,
             v.next_rank_id, nr.name AS next_rank, nr.color AS next_color, nr.stripe_color AS next_stripe_color,
             nr.requires_exam AS next_requires_exam, nr.exam_fee AS next_exam_fee,
-            v.next_min_months, v.next_min_classes, t.name AS track, t.display_style
+            v.next_min_months, v.next_min_classes, nr.min_age AS next_min_age,
+            TIMESTAMPDIFF(YEAR, up.date_of_birth, CURDATE()) AS age, t.name AS track, t.display_style
        FROM v_member_rank_progress v
+       LEFT JOIN user_profiles up ON up.user_id = v.user_id
        JOIN disciplines d ON d.dojo_id = v.dojo_id AND d.id = v.discipline_id
        JOIN ranks r       ON r.dojo_id = v.dojo_id AND r.id = v.current_rank_id
        JOIN rank_tracks t ON t.dojo_id = v.dojo_id AND t.id = v.track_id
@@ -37,6 +39,8 @@ async function memberProgress(tdb, userId) {
     const timeOk = !r.next_min_months || r.months_in_rank >= r.next_min_months;
     const classesOk = !r.next_min_classes || r.classes_in_rank >= r.next_min_classes;
     const reqOk = approved === mandatory.length;
+    // Sin fecha de nacimiento no se bloquea (muchos alumnos importados no la tienen); se marca como desconocida
+    const ageOk = !r.next_min_age || r.age == null || r.age >= r.next_min_age;
 
     out.push({
       discipline_id: r.discipline_id, discipline: r.discipline, discipline_color: r.discipline_color, track: r.track,
@@ -54,7 +58,8 @@ async function memberProgress(tdb, userId) {
         months: { have: r.months_in_rank, need: r.next_min_months, pct: pct(r.months_in_rank, r.next_min_months), ok: timeOk },
         classes: { have: r.classes_in_rank, need: r.next_min_classes, pct: pct(r.classes_in_rank, r.next_min_classes), ok: classesOk },
         requirements: { approved, total: mandatory.length, pct: pct(approved, mandatory.length), ok: reqOk },
-        eligible: timeOk && classesOk && reqOk,
+        age: { have: r.age, need: r.next_min_age, ok: ageOk, unknown: !!r.next_min_age && r.age == null },
+        eligible: timeOk && classesOk && reqOk && ageOk,
       } : null,
       requirements,
     });

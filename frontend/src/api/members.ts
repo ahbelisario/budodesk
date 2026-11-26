@@ -95,7 +95,7 @@ export type DisciplineProgress = {
   current: { rank_id: number; name: string; color: string; stripe_color: string | null; level: number; kind: string; stripes: number; max_stripes: number; since_date: string };
   next: { rank_id: number; name: string; color: string; stripe_color: string | null; requires_exam: boolean; exam_fee: number | null } | null;
   next_exam_date: string | null;
-  progress: { months: ProgressMeter; classes: ProgressMeter; requirements: { approved: number; total: number; pct: number; ok: boolean }; eligible: boolean } | null;
+  progress: { months: ProgressMeter; classes: ProgressMeter; requirements: { approved: number; total: number; pct: number; ok: boolean }; age?: { have: number | null; need: number | null; ok: boolean; unknown: boolean }; eligible: boolean } | null;
   requirements: Requirement[];
 };
 export type RankEvent = {

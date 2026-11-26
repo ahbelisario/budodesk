@@ -214,6 +214,7 @@ router.get('/eligible', requireRole(...STAFF), validate({
             v.discipline_id, d.name AS discipline, r.name AS current_rank, r.color, v.stripes,
             nr.id AS next_rank_id, nr.name AS next_rank, nr.color AS next_color,
             v.months_in_rank, v.next_min_months, v.classes_in_rank, v.next_min_classes, v.next_exam_date,
+            nr.min_age AS next_min_age, TIMESTAMPDIFF(YEAR, p.date_of_birth, CURDATE()) AS age,
             (SELECT COUNT(*) FROM rank_requirements q WHERE q.dojo_id = v.dojo_id AND q.rank_id = v.next_rank_id AND q.mandatory = 1) AS req_total,
             (SELECT COUNT(*) FROM rank_requirements q JOIN member_requirement_progress mp
                        ON mp.dojo_id = q.dojo_id AND mp.requirement_id = q.id AND mp.user_id = v.user_id AND mp.status = 'approved'
@@ -227,6 +228,7 @@ router.get('/eligible', requireRole(...STAFF), validate({
       WHERE v.dojo_id = :dojoId ${q.discipline_id ? 'AND v.discipline_id = :disc' : ''}
         AND (v.next_min_months IS NULL OR v.months_in_rank >= v.next_min_months * :near)
         AND (v.next_min_classes IS NULL OR v.classes_in_rank >= v.next_min_classes * :near)
+        AND (nr.min_age IS NULL OR p.date_of_birth IS NULL OR TIMESTAMPDIFF(YEAR, p.date_of_birth, CURDATE()) >= nr.min_age - IF(:near < 1, 1, 0))
       ORDER BY d.name, r.level DESC, p.first_name`, { disc: q.discipline_id, near });
 
   res.json({
@@ -235,7 +237,8 @@ router.get('/eligible', requireRole(...STAFF), validate({
       ...r,
       eligible: (!r.next_min_months || r.months_in_rank >= r.next_min_months)
         && (!r.next_min_classes || r.classes_in_rank >= r.next_min_classes)
-        && r.req_approved >= r.req_total,
+        && r.req_approved >= r.req_total
+        && (!r.next_min_age || r.age == null || r.age >= r.next_min_age),
     })),
   });
 });

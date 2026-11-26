@@ -110,6 +110,9 @@ function DisciplineCard({ d, userId, canEdit, onPromote, onChanged }: {
           <View style={{ flexDirection: 'row', gap: space.md, flexWrap: 'wrap' }}>
             {p.months.need ? <Meter label={mt('timeInRank')} value={mt('ofMonths', { have: Math.min(p.months.have, p.months.need), need: p.months.need })} pct={p.months.pct} ok={p.months.ok} /> : null}
             {p.classes.need ? <Meter label={mt('classesInRank')} value={mt('ofClasses', { have: p.classes.have, need: p.classes.need })} pct={p.classes.pct} ok={p.classes.ok} /> : null}
+            {p.age?.need ? (p.age.unknown
+              ? <Text variant="small" color={palette.ink2}>{mt('ageUnknown', { need: p.age.need })}</Text>
+              : <Meter label={mt('minAge')} value={mt('ofAge', { have: p.age.have ?? 0, need: p.age.need })} pct={Math.min(100, ((p.age.have ?? 0) / p.age.need) * 100)} ok={p.age.ok} />) : null}
             {total ? <Meter label={mt('syllabus')} value={mt('ofReqs', { have: approved, need: total })} pct={total ? (approved / total) * 100 : 100} ok={approved === total} /> : null}
           </View>
           <View style={{ maxWidth: 260 }}>

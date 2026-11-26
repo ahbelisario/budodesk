@@ -6,7 +6,8 @@ const express = require('express');
 const { z } = require('zod');
 const { authenticate, requireDojo, requireRole } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validate');
-const { notFound, badRequest } = require('../../utils/errors');
+const { notFound, badRequest, conflict } = require('../../utils/errors');
+const { listTemplates, getTemplate } = require('./templates');
 const { auditReq } = require('../../utils/audit');
 const { buildSet } = require('../../utils/sql');
 
@@ -48,6 +49,72 @@ router.get('/structure', validate({ query: z.object({ discipline_id: id.optional
     })),
   }));
   res.json({ status: 'success', data });
+});
+
+// ---------------------------------------------------------------------------
+// Plantillas precargadas (kendo, judo, BJJ…): ver templates.js
+// ---------------------------------------------------------------------------
+router.get('/templates', (req, res) => {
+  res.json({ status: 'success', data: listTemplates() });
+});
+
+// Crea una disciplina nueva (o agrega rutas a una existente) a partir de una plantilla.
+// body: { name?, style?, discipline_id?, tracks?: [nombres de ruta a incluir] }
+router.post('/templates/:key/apply', requireRole('admin'), validate({
+  params: z.object({ key: z.string().trim().min(1).max(60) }),
+  body: z.object({
+    name: z.string().trim().min(1).max(150).optional(),
+    style: z.string().trim().max(150).nullish(),
+    discipline_id: id.optional(),
+    tracks: z.array(z.string().trim().min(1).max(100)).min(1).optional(),
+  }),
+}), async (req, res) => {
+  const tpl = getTemplate(req.valid.params.key);
+  if (!tpl) throw notFound('Plantilla no encontrada');
+  const b = req.valid.body;
+  const tracks = b.tracks ? tpl.tracks.filter((t) => b.tracks.includes(t.name)) : tpl.tracks;
+  if (!tracks.length) throw badRequest('Elige al menos un programa de la plantilla');
+
+  const result = await req.tdb.transaction(async (t) => {
+    let disciplineId = b.discipline_id;
+    let sort = 0;
+    if (disciplineId) {
+      const d = await t.one('SELECT id FROM disciplines WHERE dojo_id = :dojoId AND id = :id FOR UPDATE', { id: disciplineId });
+      if (!d) throw notFound('Disciplina no encontrada');
+      const [{ s }] = await t.query('SELECT COALESCE(MAX(sort_order), -1) + 1 AS s FROM rank_tracks WHERE dojo_id = :dojoId AND discipline_id = :id', { id: disciplineId });
+      sort = Number(s);
+    } else {
+      const name = b.name ?? tpl.name;
+      const dup = await t.one('SELECT id FROM disciplines WHERE dojo_id = :dojoId AND name = :name', { name });
+      if (dup) throw conflict(`Ya existe una disciplina llamada "${name}". Elige otro nombre o agrega los programas a esa disciplina.`);
+      const [{ s }] = await t.query('SELECT COALESCE(MAX(sort_order), -1) + 1 AS s FROM disciplines WHERE dojo_id = :dojoId');
+      const r = await t.query(
+        'INSERT INTO disciplines (dojo_id, name, style, sort_order) VALUES (:dojoId, :name, :style, :sort)',
+        { name, style: b.style === undefined ? tpl.style : b.style, sort: Number(s) });
+      disciplineId = r.insertId;
+    }
+
+    let rankCount = 0;
+    for (const [i, tr] of tracks.entries()) {
+      const rt = await t.query(
+        `INSERT INTO rank_tracks (dojo_id, discipline_id, name, min_age, max_age, display_style, sort_order)
+         VALUES (:dojoId, :disc, :name, :min, :max, :style, :sort)`,
+        { disc: disciplineId, name: tr.name, min: tr.min_age ?? null, max: tr.max_age ?? null, style: tr.display_style, sort: sort + i });
+      for (const [lv, r] of tr.ranks.entries()) {
+        await t.query(
+          `INSERT INTO ranks (dojo_id, discipline_id, track_id, level, name, short_name, kind, color, stripe_color,
+                              max_stripes, min_months, min_classes, min_age, requires_exam)
+           VALUES (:dojoId, :disc, :tr, :lv, :name, :short, :kind, :color, :stripe, :maxs, :mm, :mc, :ma, :exam)`,
+          { disc: disciplineId, tr: rt.insertId, lv: lv + 1, name: r.name, short: r.short_name, kind: r.kind, color: r.color,
+            stripe: r.stripe_color, maxs: r.max_stripes, mm: r.min_months, mc: r.min_classes, ma: r.min_age, exam: Number(r.requires_exam) });
+        rankCount += 1;
+      }
+    }
+    await auditReq(req, t.executor, { action: 'create', entity: 'discipline', entityId: disciplineId,
+      after: { template: tpl.key, tracks: tracks.map((x) => x.name), ranks: rankCount } });
+    return { discipline_id: disciplineId, tracks: tracks.length, ranks: rankCount };
+  });
+  res.status(201).json({ status: 'success', data: result });
 });
 
 // ---------------------------------------------------------------------------
