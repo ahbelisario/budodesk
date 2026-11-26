@@ -21,22 +21,23 @@ export type DojoSettings = {
   legal_name: string | null; tax_id: string | null; self_registration: 'closed' | 'approval' | 'open';
   privacy_policy: string | null; privacy_version: string | null; terms_conditions: string | null; plan: string; status: string; trial_ends_at: string | null;
 };
-export type PaymentSettings = {
+export type CredSlot = 'test' | 'live';
+type Slotted<T> = { [K in `${'paypal' | 'mp'}_${CredSlot}_${string}`]?: T };
+export type PaymentSettings = Slotted<string | number | null> & {
   paypal_enabled: number; accepts_cash: number; accepts_transfer: number; transfer_instructions: string | null;
   late_fee_amount: number | null; late_fee_grace_days: number | null;
   auto_charges?: number; payment_reminders?: number;
-  paypal_mode?: 'sandbox' | 'live'; paypal_client_id?: string | null; paypal_secret_set?: number; paypal_webhook_id?: string | null;
-  paypal_fee_percent?: number | null; paypal_fee_fixed?: number | null;
-  mp_enabled?: number; mp_mode?: 'test' | 'live'; mp_public_key?: string | null; mp_access_token_set?: number; mp_webhook_secret_set?: number;
-  mp_fee_percent?: number | null; mp_fee_fixed?: number | null;
-  encryption_available?: boolean; webhook_urls?: { paypal: string; mercadopago: string };
+  paypal_mode?: 'sandbox' | 'live'; paypal_fee_percent?: number | null; paypal_fee_fixed?: number | null;
+  mp_enabled?: number; mp_mode?: 'test' | 'live'; mp_fee_percent?: number | null; mp_fee_fixed?: number | null;
+  // Por ambiente: paypal_{test|live}_client_id / _webhook_id / _secret_set, mp_{test|live}_public_key / _access_token_set / _webhook_secret_set
+  encryption_available?: boolean;
+  webhook_urls?: { paypal: Record<CredSlot, string>; mercadopago: Record<CredSlot, string> };
 };
-export type OnlineSettingsPatch = {
-  paypal_enabled?: boolean; paypal_mode?: 'sandbox' | 'live'; paypal_client_id?: string | null; paypal_secret?: string | null;
-  paypal_webhook_id?: string | null; paypal_fee_percent?: number | null; paypal_fee_fixed?: number | null;
-  mp_enabled?: boolean; mp_mode?: 'test' | 'live'; mp_public_key?: string | null; mp_access_token?: string | null;
-  mp_webhook_secret?: string | null; mp_fee_percent?: number | null; mp_fee_fixed?: number | null;
+export type OnlineSettingsPatch = Slotted<string | null> & {
+  paypal_enabled?: boolean; paypal_mode?: 'sandbox' | 'live'; paypal_fee_percent?: number | null; paypal_fee_fixed?: number | null;
+  mp_enabled?: boolean; mp_mode?: 'test' | 'live'; mp_fee_percent?: number | null; mp_fee_fixed?: number | null;
 };
+export type ProviderTest = { mode: CredSlot; client_id?: string; secret?: string; access_token?: string };
 export type Location = { id: number; name: string; address: string | null; active: number };
 export type AuditEntry = { id: number; action: string; entity: string; entity_id: string | null; before_data: unknown; after_data: unknown; created_at: string; user_name: string | null };
 
@@ -54,7 +55,7 @@ export const dojoApi = {
   updateSettings: (b: Partial<Omit<DojoSettings, 'require_membership_to_book'>> & { require_membership_to_book?: boolean }) => api.patch<DojoSettings>('/dojo', b),
   paymentSettings: () => api.get<PaymentSettings>('/dojo/payment-settings'),
   updateOnlineSettings: (b: OnlineSettingsPatch) => api.patch<PaymentSettings>('/dojo/payment-settings', b),
-  testProvider: (provider: 'paypal' | 'mercadopago', b: OnlineSettingsPatch) =>
+  testProvider: (provider: 'paypal' | 'mercadopago', b: ProviderTest) =>
     api.post<{ ok: true; account?: string }>(`/dojo/payment-settings/test/${provider}`, b),
   updatePaymentSettings: (b: { accepts_cash?: boolean; accepts_transfer?: boolean; transfer_instructions?: string | null; late_fee_amount?: number | null; late_fee_grace_days?: number | null; auto_charges?: boolean; payment_reminders?: boolean }) =>
     api.patch('/dojo/payment-settings', b),

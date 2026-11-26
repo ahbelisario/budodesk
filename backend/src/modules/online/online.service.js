@@ -36,16 +36,28 @@ async function loadSettings(dojoId) {
 
 const dec = (v) => (v ? cipher.decryptText(String(v)) : null);
 
-function providerConfig(s, provider) {
+/** Cada proveedor guarda dos juegos de credenciales: 'test' (sandbox) y 'live' */
+const slot = (mode) => (mode === 'live' ? 'live' : 'test');
+const activeMode = (s, provider) => (provider === 'paypal' ? s.paypal_mode || 'sandbox' : s.mp_mode || 'test');
+
+/** Credenciales de un ambiente (por omisión, el activo). Un pago siempre usa las del ambiente en que se creó. */
+function providerConfig(s, provider, mode = activeMode(s, provider)) {
+  const k = slot(mode);
   if (provider === 'paypal') {
-    return { mode: s.paypal_mode || 'sandbox', clientId: s.paypal_client_id, secret: dec(s.paypal_secret_enc), webhookId: s.paypal_webhook_id };
+    return { mode: k === 'live' ? 'live' : 'sandbox', clientId: s[`paypal_${k}_client_id`], secret: dec(s[`paypal_${k}_secret_enc`]), webhookId: s[`paypal_${k}_webhook_id`] };
   }
-  return { mode: s.mp_mode || 'test', publicKey: s.mp_public_key, accessToken: dec(s.mp_access_token_enc), webhookSecret: dec(s.mp_webhook_secret_enc) };
+  return { mode: k, publicKey: s[`mp_${k}_public_key`], accessToken: dec(s[`mp_${k}_access_token_enc`]), webhookSecret: dec(s[`mp_${k}_webhook_secret_enc`]) };
+}
+
+/** ¿Están completas las credenciales de ese ambiente? */
+function slotComplete(s, provider, k) {
+  if (provider === 'paypal') return !!(s[`paypal_${k}_client_id`] && s[`paypal_${k}_secret_enc`]);
+  return !!s[`mp_${k}_access_token_enc`];
 }
 
 function isReady(s, provider) {
-  if (provider === 'paypal') return !!(s.paypal_enabled && s.paypal_client_id && s.paypal_secret_enc);
-  return !!(s.mp_enabled && s.mp_access_token_enc);
+  const enabled = provider === 'paypal' ? s.paypal_enabled : s.mp_enabled;
+  return !!(enabled && slotComplete(s, provider, slot(activeMode(s, provider))));
 }
 
 function feeConfig(s, provider) {
@@ -96,7 +108,8 @@ function returnUrls(baseUrl, checkoutId, provider) {
   return { success: q(''), cancel: q('&cancelled=1'), failure: q('&failed=1'), pending: q('&pending=1') };
 }
 
-const webhookUrl = (provider, dojoId) => `${env.APP_BASE_URL.replace(/\/$/, '')}/api/v2/online-payments/webhooks/${provider}/${dojoId}`;
+const webhookUrl = (provider, dojoId, mode) =>
+  `${env.APP_BASE_URL.replace(/\/$/, '')}/api/v2/online-payments/webhooks/${provider}/${dojoId}/${slot(mode)}`;
 
 // ---------------------------------------------------------------------------
 // Crear
@@ -139,7 +152,7 @@ async function createCheckout(tdb, { dojoId, userId, createdBy, provider, charge
       const p = await mercadopago.createPreference(cfg, {
         checkoutId, dojoId, amount: total, currency: s.currency, description,
         backUrls: { success: urls.success, failure: urls.failure, pending: urls.pending },
-        notificationUrl: /^https:\/\//.test(env.APP_BASE_URL) ? webhookUrl('mercadopago', dojoId) : null,
+        notificationUrl: /^https:\/\//.test(env.APP_BASE_URL) ? webhookUrl('mercadopago', dojoId, cfg.mode) : null,
         payerEmail,
       });
       ref = p.id; redirectUrl = p.checkoutUrl;
@@ -267,7 +280,7 @@ async function confirm(dojoId, checkoutId, { cancelled } = {}) {
   let c = await getCheckout(tdb, checkoutId);
   if (c.status === 'completed' || c.status === 'expired') return publicCheckout(c);
   const s = await loadSettings(dojoId);
-  const cfg = providerConfig(s, c.provider);
+  const cfg = providerConfig(s, c.provider, c.mode); // las del ambiente en que se creó, aunque después cambie
 
   if (c.provider === 'paypal') {
     if (!c.provider_ref) return publicCheckout(c);
@@ -315,9 +328,10 @@ async function saveEvent(dojoId, provider, eventId, type, payload, verified) {
 const markEvent = (id, error = null) => pool.query(
   'UPDATE payment_webhook_events SET processed_at = NOW(), error = :error WHERE id = :id', { id, error });
 
-async function paypalWebhook(dojoId, headers, event) {
+/** mode: el de la dirección del aviso (…/test o …/live); sin él, el ambiente activo */
+async function paypalWebhook(dojoId, mode, headers, event) {
   const s = await loadSettings(dojoId);
-  const cfg = providerConfig(s, 'paypal');
+  const cfg = providerConfig(s, 'paypal', mode || activeMode(s, 'paypal'));
   const verified = await paypal.verifyWebhook(cfg, headers, event).catch(() => false);
   const eventRow = await saveEvent(dojoId, 'paypal', event?.id || `${Date.now()}`, event?.event_type || '?', event, verified);
   if (!eventRow) return { duplicate: true };
@@ -338,9 +352,9 @@ async function paypalWebhook(dojoId, headers, event) {
   return { ok: true };
 }
 
-async function mercadopagoWebhook(dojoId, { headers, query, body }) {
+async function mercadopagoWebhook(dojoId, mode, { headers, query, body }) {
   const s = await loadSettings(dojoId);
-  const cfg = providerConfig(s, 'mercadopago');
+  const cfg = providerConfig(s, 'mercadopago', mode || activeMode(s, 'mercadopago'));
   const dataId = query['data.id'] ?? body?.data?.id;
   const type = query.type ?? body?.type ?? body?.topic ?? '?';
   const verified = mercadopago.verifyWebhook(cfg.webhookSecret, {
@@ -375,15 +389,20 @@ async function expireStale() {
   return r.affectedRows;
 }
 
-/** Prueba de credenciales (las guardadas o las del formulario) */
+/**
+ * Prueba de credenciales de un ambiente: las del formulario o, si vienen vacías, las guardadas.
+ * override: { mode: 'test'|'live', client_id?, secret?, access_token? }
+ */
 async function testProvider(dojoId, provider, override = {}) {
   const s = await loadSettings(dojoId);
-  const cfg = providerConfig(s, provider);
+  const k = slot(override.mode ?? activeMode(s, provider));
+  const cfg = providerConfig(s, provider, k);
   const merged = provider === 'paypal'
-    ? { ...cfg, mode: override.paypal_mode ?? cfg.mode, clientId: override.paypal_client_id || cfg.clientId, secret: override.paypal_secret || cfg.secret }
-    : { ...cfg, mode: override.mp_mode ?? cfg.mode, accessToken: override.mp_access_token || cfg.accessToken };
-  if (provider === 'paypal' && (!merged.clientId || !merged.secret)) throw badRequest('Llena el Client ID y el Secret de PayPal');
-  if (provider === 'mercadopago' && !merged.accessToken) throw badRequest('Llena el Access Token de Mercado Pago');
+    ? { ...cfg, clientId: override.client_id || cfg.clientId, secret: override.secret || cfg.secret }
+    : { ...cfg, accessToken: override.access_token || cfg.accessToken };
+  const env_ = k === 'live' ? 'reales' : 'de prueba';
+  if (provider === 'paypal' && (!merged.clientId || !merged.secret)) throw badRequest(`Llena el Client ID y el Secret ${env_} de PayPal`);
+  if (provider === 'mercadopago' && !merged.accessToken) throw badRequest(`Llena el Access Token ${env_} de Mercado Pago`);
   try {
     return provider === 'paypal' ? await paypal.test(merged) : await mercadopago.test(merged);
   } catch (e) {
@@ -393,5 +412,5 @@ async function testProvider(dojoId, provider, override = {}) {
 
 module.exports = {
   options, createCheckout, confirm, complete, getCheckout, publicCheckout, paypalWebhook, mercadopagoWebhook,
-  expireStale, testProvider, computeFee, webhookUrl, safeReturnBase, NAMES, conflict,
+  expireStale, testProvider, computeFee, webhookUrl, safeReturnBase, slotComplete, NAMES, conflict,
 };

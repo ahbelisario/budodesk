@@ -74,27 +74,48 @@ dojo.patch('/', requireRole('admin'), validate({
   res.json({ status: 'success', data: after });
 });
 
-// Cobro (los secretos de PayPal se configuran en su propio módulo)
-const PAY_COLS = `paypal_enabled, paypal_mode, paypal_client_id, (paypal_secret_enc IS NOT NULL) AS paypal_secret_set, paypal_webhook_id,
-            paypal_fee_percent, paypal_fee_fixed,
-            mp_enabled, mp_mode, mp_public_key, (mp_access_token_enc IS NOT NULL) AS mp_access_token_set,
-            (mp_webhook_secret_enc IS NOT NULL) AS mp_webhook_secret_set, mp_fee_percent, mp_fee_fixed,
-            accepts_cash, accepts_transfer, transfer_instructions, late_fee_amount, late_fee_grace_days,
-            auto_charges, payment_reminders`;
+// Cobro. PayPal y Mercado Pago guardan credenciales de prueba y reales por separado
+// (columnas <prov>_test_* y <prov>_live_*); el "modo" solo elige cuáles se usan.
+const SLOTS = ['test', 'live'];
+const PP_PLAIN = ['client_id', 'webhook_id'];
+const MP_PLAIN = ['public_key'];
+const SECRET_COLS = Object.fromEntries(SLOTS.flatMap((k) => [
+  [`paypal_${k}_secret`, `paypal_${k}_secret_enc`],
+  [`mp_${k}_access_token`, `mp_${k}_access_token_enc`],
+  [`mp_${k}_webhook_secret`, `mp_${k}_webhook_secret_enc`],
+]));
+const PAY_COLS = [
+  'paypal_enabled', 'paypal_mode', 'paypal_fee_percent', 'paypal_fee_fixed',
+  'mp_enabled', 'mp_mode', 'mp_fee_percent', 'mp_fee_fixed',
+  ...SLOTS.flatMap((k) => [...PP_PLAIN.map((c) => `paypal_${k}_${c}`), ...MP_PLAIN.map((c) => `mp_${k}_${c}`)]),
+  ...Object.entries(SECRET_COLS).map(([k, col]) => `(\`${col}\` IS NOT NULL) AS ${k}_set`),
+  'accepts_cash', 'accepts_transfer', 'transfer_instructions', 'late_fee_amount', 'late_fee_grace_days',
+  'auto_charges', 'payment_reminders',
+].join(', ');
 
 async function paymentSettings(req) {
   await req.tdb.query('INSERT IGNORE INTO dojo_payment_settings (dojo_id) VALUES (:dojoId)');
   const row = await req.tdb.one(`SELECT ${PAY_COLS} FROM dojo_payment_settings WHERE dojo_id = :dojoId`);
+  const urls = (p) => Object.fromEntries(SLOTS.map((k) => [k, online.webhookUrl(p, req.auth.dojoId, k)]));
   return {
     ...row,
     encryption_available: cipher.hasKey(),
-    webhook_urls: { paypal: online.webhookUrl('paypal', req.auth.dojoId), mercadopago: online.webhookUrl('mercadopago', req.auth.dojoId) },
+    webhook_urls: { paypal: urls('paypal'), mercadopago: urls('mercadopago') },
   };
 }
 
 dojo.get('/payment-settings', requireRole('admin'), async (req, res) => {
   res.json({ status: 'success', data: await paymentSettings(req) });
 });
+
+const txt = (n) => z.string().trim().max(n).nullish();
+const credFields = Object.fromEntries(SLOTS.flatMap((k) => [
+  [`paypal_${k}_client_id`, txt(255)], [`paypal_${k}_secret`, txt(500)], [`paypal_${k}_webhook_id`, txt(100)],
+  [`mp_${k}_public_key`, txt(255)], [`mp_${k}_access_token`, txt(500)], [`mp_${k}_webhook_secret`, txt(500)],
+]));
+const PLAIN_MAP = Object.fromEntries(SLOTS.flatMap((k) => [
+  ...PP_PLAIN.map((c) => [`paypal_${k}_${c}`, `paypal_${k}_${c}`]), ...MP_PLAIN.map((c) => [`mp_${k}_${c}`, `mp_${k}_${c}`]),
+]));
 
 dojo.patch('/payment-settings', requireRole('admin'), validate({
   body: z.object({
@@ -104,60 +125,61 @@ dojo.patch('/payment-settings', requireRole('admin'), validate({
     late_fee_grace_days: z.coerce.number().int().min(0).max(60).nullish(),
     auto_charges: z.boolean().optional(), payment_reminders: z.boolean().optional(),
     paypal_enabled: z.boolean().optional(), paypal_mode: z.enum(['sandbox', 'live']).optional(),
-    paypal_client_id: z.string().trim().max(255).nullish(), paypal_secret: z.string().trim().max(500).nullish(),
-    paypal_webhook_id: z.string().trim().max(100).nullish(),
     paypal_fee_percent: z.coerce.number().min(0).max(20).nullish(), paypal_fee_fixed: z.coerce.number().min(0).max(1000).nullish(),
     mp_enabled: z.boolean().optional(), mp_mode: z.enum(['test', 'live']).optional(),
-    mp_public_key: z.string().trim().max(255).nullish(), mp_access_token: z.string().trim().max(500).nullish(),
-    mp_webhook_secret: z.string().trim().max(500).nullish(),
     mp_fee_percent: z.coerce.number().min(0).max(20).nullish(), mp_fee_fixed: z.coerce.number().min(0).max(1000).nullish(),
+    ...credFields,
   }).refine((o) => Object.keys(o).length > 0, 'Nada que actualizar'),
 }), async (req, res) => {
   const set = buildSet(req.valid.body, { accepts_cash: 'accepts_cash', accepts_transfer: 'accepts_transfer',
     transfer_instructions: 'transfer_instructions', late_fee_amount: 'late_fee_amount', late_fee_grace_days: 'late_fee_grace_days',
     auto_charges: 'auto_charges', payment_reminders: 'payment_reminders',
-    paypal_enabled: 'paypal_enabled', paypal_mode: 'paypal_mode', paypal_client_id: 'paypal_client_id', paypal_webhook_id: 'paypal_webhook_id',
-    paypal_fee_percent: 'paypal_fee_percent', paypal_fee_fixed: 'paypal_fee_fixed',
-    mp_enabled: 'mp_enabled', mp_mode: 'mp_mode', mp_public_key: 'mp_public_key', mp_fee_percent: 'mp_fee_percent', mp_fee_fixed: 'mp_fee_fixed' });
+    paypal_enabled: 'paypal_enabled', paypal_mode: 'paypal_mode', paypal_fee_percent: 'paypal_fee_percent', paypal_fee_fixed: 'paypal_fee_fixed',
+    mp_enabled: 'mp_enabled', mp_mode: 'mp_mode', mp_fee_percent: 'mp_fee_percent', mp_fee_fixed: 'mp_fee_fixed',
+    ...PLAIN_MAP });
   const b = req.valid.body;
   // Llaves secretas: solo se escriben (cifradas), nunca se devuelven. Vacío = conservar la actual.
-  const secrets = { paypal_secret: 'paypal_secret_enc', mp_access_token: 'mp_access_token_enc', mp_webhook_secret: 'mp_webhook_secret_enc' };
-  const wantsSecret = Object.keys(secrets).some((k) => b[k]);
+  const wantsSecret = Object.keys(SECRET_COLS).some((k) => b[k]);
   if ((wantsSecret || b.paypal_enabled || b.mp_enabled) && !cipher.hasKey()) {
     throw new AppError(409, 'NO_ENCRYPTION_KEY', 'Falta BACKUP_ENCRYPTION_KEY en el servidor: corre ./deploy.sh config y ./deploy.sh up');
   }
-  for (const [k, col] of Object.entries(secrets)) {
+
+  // No se puede dejar activo un método sin las credenciales del ambiente elegido (se revisa ANTES de guardar)
+  const cur = await paymentSettings(req);
+  const merged = { ...cur };
+  for (const [k, v] of Object.entries(b)) if (!(k in SECRET_COLS)) merged[k] = v;
+  for (const k of Object.keys(SECRET_COLS)) if (b[k]) merged[`${k}_set`] = 1;
+  const slotOf = (m) => (m === 'live' ? 'live' : 'test');
+  const envName = (k) => (k === 'live' ? 'reales' : 'de prueba');
+  const pk = slotOf(merged.paypal_mode);
+  if (merged.paypal_enabled && !(merged[`paypal_${pk}_client_id`] && merged[`paypal_${pk}_secret_set`])) {
+    throw badRequest(`Para activar PayPal llena el Client ID y el Secret ${envName(pk)}`);
+  }
+  const mk = slotOf(merged.mp_mode);
+  if (merged.mp_enabled && !merged[`mp_${mk}_access_token_set`]) {
+    throw badRequest(`Para activar Mercado Pago llena el Access Token ${envName(mk)}`);
+  }
+
+  for (const [k, col] of Object.entries(SECRET_COLS)) {
     if (!b[k]) continue;
     set.sql = [set.sql, `\`${col}\` = :set_${k}`].filter(Boolean).join(', ');
     set.params[`set_${k}`] = cipher.encryptText(b[k]);
   }
   if (!set.sql) throw badRequest('Nada que actualizar');
-  await req.tdb.query('INSERT IGNORE INTO dojo_payment_settings (dojo_id) VALUES (:dojoId)');
   await req.tdb.query(`UPDATE dojo_payment_settings SET ${set.sql} WHERE dojo_id = :dojoId`, set.params);
-  // No se puede dejar activo un método sin credenciales
-  const after = await paymentSettings(req);
-  if (after.paypal_enabled && !(after.paypal_client_id && after.paypal_secret_set)) {
-    await req.tdb.query('UPDATE dojo_payment_settings SET paypal_enabled = 0 WHERE dojo_id = :dojoId');
-    throw badRequest('Para activar PayPal llena el Client ID y el Secret');
-  }
-  if (after.mp_enabled && !after.mp_access_token_set) {
-    await req.tdb.query('UPDATE dojo_payment_settings SET mp_enabled = 0 WHERE dojo_id = :dojoId');
-    throw badRequest('Para activar Mercado Pago llena el Access Token');
-  }
   const logged = { ...b };
-  for (const k of Object.keys(secrets)) if (logged[k]) logged[k] = '(cambiada)';
+  for (const k of Object.keys(SECRET_COLS)) if (logged[k]) logged[k] = '(cambiada)';
   await auditReq(req, req.tdb.executor, { action: 'update', entity: 'payment_settings', entityId: req.auth.dojoId, after: logged });
   res.json({ status: 'success', data: await paymentSettings(req) });
 });
 
-// Probar credenciales de PayPal o Mercado Pago (las guardadas o las del formulario)
+// Probar las credenciales de un ambiente (las del formulario o, si vienen vacías, las guardadas)
 dojo.post('/payment-settings/test/:provider', requireRole('admin'), validate({
   params: z.object({ provider: z.enum(['paypal', 'mercadopago']) }),
   body: z.object({
-    paypal_mode: z.enum(['sandbox', 'live']).optional(), paypal_client_id: z.string().trim().max(255).nullish(),
-    paypal_secret: z.string().trim().max(500).nullish(), mp_mode: z.enum(['test', 'live']).optional(),
-    mp_access_token: z.string().trim().max(500).nullish(),
-  }).passthrough(),
+    mode: z.enum(['test', 'live']).optional(),
+    client_id: txt(255), secret: txt(500), access_token: txt(500),
+  }),
 }), async (req, res) => {
   res.json({ status: 'success', data: await online.testProvider(req.auth.dojoId, req.valid.params.provider, req.valid.body) });
 });

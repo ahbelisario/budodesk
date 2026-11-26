@@ -151,16 +151,22 @@ dinero llega directo a su cuenta.
 
 - Las credenciales se guardan cifradas con `BACKUP_ENCRYPTION_KEY`, así que sin
   esa llave no se pueden activar.
-- **Avisos (webhooks):** la pantalla muestra la dirección que hay que registrar
-  en PayPal Developer y en Mercado Pago. Debe ser pública y con `https`, por
-  ejemplo `https://seikoukan.budodesk.com/api/v2/online-payments/webhooks/...`.
-  Si se pierde un aviso, el pago se confirma igual cuando el alumno regresa a
-  la app.
+- **Prueba y Real por separado:** cada proveedor guarda dos juegos de
+  credenciales (Client ID/Secret/Webhook ID en PayPal; Public Key/Access
+  Token/clave secreta en Mercado Pago). El selector «Ambiente en uso» solo
+  elige con cuáles se cobran los pagos nuevos; un pago que empezó en un
+  ambiente se termina con las credenciales de ese ambiente. No se puede
+  pasar a Real si faltan las credenciales reales.
+- **Avisos (webhooks):** cada ambiente tiene su propia dirección, que termina
+  en `/test` o `/live`; por ejemplo
+  `https://seikoukan.budodesk.com/api/v2/online-payments/webhooks/paypal/1/live`.
+  Registra la de prueba en la app Sandbox de PayPal y la real en la app Live;
+  en Mercado Pago, cada una en su modo. Deben ser públicas y con `https`. Si se
+  pierde un aviso, el pago se confirma igual cuando el alumno regresa a la app.
 - **En local** los avisos no llegan, porque no hay dirección pública. El pago se
-  confirma al regresar a la app; con eso basta para probar con las
-  credenciales de prueba.
-- Empieza siempre en modo **Prueba** (sandbox) y pasa a **Real** cuando todo
-  funcione.
+  confirma al regresar a la app.
+- Empieza en **Prueba** y pasa a **Real** cuando todo funcione. Para probar en
+  Real, haz un pago chico y reembólsalo desde el panel del proveedor.
 
 ## Nunca
 

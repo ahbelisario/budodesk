@@ -20,8 +20,10 @@ function fakeServer() {
   // --- PayPal ---
   app.post('/v1/oauth2/token', (req, res) => {
     const auth = Buffer.from(String(req.headers.authorization || '').replace('Basic ', ''), 'base64').toString();
-    if (auth !== 'cid:sec') return res.status(401).json({ error: 'invalid_client' });
-    res.json({ access_token: 'tok', expires_in: 3600 });
+    const tokens = { 'cid:sec': 'tok', 'lcid:lsec': 'tok-live' };
+    if (!tokens[auth]) return res.status(401).json({ error: 'invalid_client' });
+    fake.lastPaypalToken = tokens[auth];
+    res.json({ access_token: tokens[auth], expires_in: 3600 });
   });
   app.post('/v2/checkout/orders', (req, res) => {
     const id = `ORDER-${++fake.seq}`;
@@ -47,7 +49,9 @@ function fakeServer() {
     res.status(201).json(orderJson(o));
   });
   app.post('/v1/notifications/verify-webhook-signature', (req, res) => {
-    res.json({ verification_status: req.body.transmission_sig === 'firma-buena' && req.body.webhook_id === 'WH-1' ? 'SUCCESS' : 'FAILURE' });
+    const expected = req.headers.authorization === 'Bearer tok-live' ? 'WH-LIVE' : 'WH-1';
+    fake.lastWebhookId = req.body.webhook_id;
+    res.json({ verification_status: req.body.transmission_sig === 'firma-buena' && req.body.webhook_id === expected ? 'SUCCESS' : 'FAILURE' });
   });
   // --- Mercado Pago ---
   const mpAuth = (req, res, next) => (req.headers.authorization === 'Bearer TEST-ok' ? next() : res.status(401).json({ message: 'invalid token' }));
@@ -126,19 +130,34 @@ describe('configuración', () => {
   test('PayPal: no se activa sin credenciales; la llave secreta nunca se devuelve', async () => {
     assert.equal((await api('patch', '/dojo/payment-settings', T.admin, { paypal_enabled: true })).status, 400);
     const s = ok(await api('patch', '/dojo/payment-settings', T.admin, {
-      paypal_client_id: 'cid', paypal_secret: 'sec', paypal_webhook_id: 'WH-1', paypal_mode: 'sandbox', paypal_enabled: true,
+      paypal_test_client_id: 'cid', paypal_test_secret: 'sec', paypal_test_webhook_id: 'WH-1', paypal_mode: 'sandbox', paypal_enabled: true,
     }));
     assert.equal(s.paypal_enabled, 1);
-    assert.equal(s.paypal_secret_set, 1);
+    assert.equal(s.paypal_test_secret_set, 1);
+    assert.equal(s.paypal_live_secret_set, 0);
     assert.equal(JSON.stringify(s).includes('"sec"'), false);
-    assert.match(s.webhook_urls.paypal, /\/api\/v2\/online-payments\/webhooks\/paypal\/1$/);
-    const [[row]] = await pool.query('SELECT paypal_secret_enc FROM dojo_payment_settings WHERE dojo_id = 1');
-    assert.match(String(row.paypal_secret_enc), /^v1:/);
+    assert.match(s.webhook_urls.paypal.test, /\/api\/v2\/online-payments\/webhooks\/paypal\/1\/test$/);
+    assert.match(s.webhook_urls.paypal.live, /\/webhooks\/paypal\/1\/live$/);
+    const [[row]] = await pool.query('SELECT paypal_test_secret_enc FROM dojo_payment_settings WHERE dojo_id = 1');
+    assert.match(String(row.paypal_test_secret_enc), /^v1:/);
   });
 
-  test('probar credenciales: buenas y malas', async () => {
+  test('PayPal: no se puede pasar a modo real sin las credenciales reales', async () => {
+    const r = await api('patch', '/dojo/payment-settings', T.admin, { paypal_mode: 'live' });
+    assert.equal(r.status, 400);
+    assert.match(r.body.message, /reales/);
+    const s = ok(await api('get', '/dojo/payment-settings', T.admin));
+    assert.equal(s.paypal_mode, 'sandbox'); // no se guardó nada
+    assert.equal(s.paypal_enabled, 1);
+  });
+
+  test('probar credenciales: buenas y malas, por ambiente', async () => {
     ok(await api('post', '/dojo/payment-settings/test/paypal', T.admin, {}));
-    const bad = await api('post', '/dojo/payment-settings/test/paypal', T.admin, { paypal_secret: 'otra' });
+    ok(await api('post', '/dojo/payment-settings/test/paypal', T.admin, { mode: 'live', client_id: 'lcid', secret: 'lsec' }));
+    const none = await api('post', '/dojo/payment-settings/test/paypal', T.admin, { mode: 'live' });
+    assert.equal(none.status, 400);
+    assert.match(none.body.message, /reales/);
+    const bad = await api('post', '/dojo/payment-settings/test/paypal', T.admin, { secret: 'otra' });
     assert.equal(bad.status, 400);
     assert.match(bad.body.message, /Client ID o el Secret/);
     assert.equal((await api('post', '/dojo/payment-settings/test/paypal', T.student, {})).status, 403);
@@ -207,13 +226,13 @@ describe('PayPal', () => {
     const event = { id: 'WH-EVT-1', event_type: 'CHECKOUT.ORDER.APPROVED', resource: { id: orderId } };
     const hdr = { 'paypal-transmission-sig': 'firma-mala', 'paypal-auth-algo': 'x', 'paypal-cert-url': 'x', 'paypal-transmission-id': 't', 'paypal-transmission-time': 'now' };
     // Firma mala: se rechaza y no se procesa
-    assert.equal((await request(app).post('/api/v2/online-payments/webhooks/paypal/1').set(hdr).send({ ...event, id: 'WH-EVT-0' })).status, 400);
+    assert.equal((await request(app).post('/api/v2/online-payments/webhooks/paypal/1/test').set(hdr).send({ ...event, id: 'WH-EVT-0' })).status, 400);
     assert.equal((await chargeRow(c)).status, 'pending');
     // Firma buena
-    assert.equal((await request(app).post('/api/v2/online-payments/webhooks/paypal/1').set({ ...hdr, 'paypal-transmission-sig': 'firma-buena' }).send(event)).status, 200);
+    assert.equal((await request(app).post('/api/v2/online-payments/webhooks/paypal/1/test').set({ ...hdr, 'paypal-transmission-sig': 'firma-buena' }).send(event)).status, 200);
     assert.equal((await chargeRow(c)).status, 'paid');
     // El mismo aviso repetido se ignora
-    assert.equal((await request(app).post('/api/v2/online-payments/webhooks/paypal/1').set({ ...hdr, 'paypal-transmission-sig': 'firma-buena' }).send(event)).status, 200);
+    assert.equal((await request(app).post('/api/v2/online-payments/webhooks/paypal/1/test').set({ ...hdr, 'paypal-transmission-sig': 'firma-buena' }).send(event)).status, 200);
     assert.equal(await paymentsCount(), 2);
     assert.equal(ok(await api('get', `/online-payments/${co.checkout_id}`, T.student)).status, 'completed');
   });
@@ -267,13 +286,14 @@ describe('Mercado Pago', () => {
   const SECRET = 'secreto-avisos';
 
   test('activar con credenciales de prueba', async () => {
-    const bad = await api('post', '/dojo/payment-settings/test/mercadopago', T.admin, { mp_access_token: 'TEST-malo' });
+    const bad = await api('post', '/dojo/payment-settings/test/mercadopago', T.admin, { mode: 'test', access_token: 'TEST-malo' });
     assert.equal(bad.status, 400);
     const s = ok(await api('patch', '/dojo/payment-settings', T.admin, {
-      mp_access_token: 'TEST-ok', mp_public_key: 'TEST-pk', mp_webhook_secret: SECRET, mp_mode: 'test', mp_enabled: true,
+      mp_test_access_token: 'TEST-ok', mp_test_public_key: 'TEST-pk', mp_test_webhook_secret: SECRET, mp_mode: 'test', mp_enabled: true,
     }));
     assert.equal(s.mp_enabled, 1);
-    assert.equal(s.mp_access_token_set, 1);
+    assert.equal(s.mp_test_access_token_set, 1);
+    assert.equal(s.mp_live_access_token_set, 0);
     assert.equal(ok(await api('post', '/dojo/payment-settings/test/mercadopago', T.admin, {})).account, 'DOJO_PRUEBA');
     assert.equal(ok(await api('get', '/online-payments/options', T.student)).length, 2);
   });
@@ -297,11 +317,11 @@ describe('Mercado Pago', () => {
 
   test('cuando se acredita, el aviso (webhook) firmado lo registra', async () => {
     const p = mpPay(co.checkout_id, 'approved', 750);
-    const bad = await request(app).post(`/api/v2/online-payments/webhooks/mercadopago/1?data.id=${p.id}&type=payment`)
+    const bad = await request(app).post(`/api/v2/online-payments/webhooks/mercadopago/1/test?data.id=${p.id}&type=payment`)
       .set({ 'x-signature': mpSignature('otro-secreto', p.id, 'req-1'), 'x-request-id': 'req-1' }).send({ type: 'payment', data: { id: String(p.id) } });
     assert.equal(bad.status, 400);
     assert.equal((await chargeRow(c)).status, 'pending');
-    const good = await request(app).post(`/api/v2/online-payments/webhooks/mercadopago/1?data.id=${p.id}&type=payment`)
+    const good = await request(app).post(`/api/v2/online-payments/webhooks/mercadopago/1/test?data.id=${p.id}&type=payment`)
       .set({ 'x-signature': mpSignature(SECRET, p.id, 'req-2'), 'x-request-id': 'req-2' }).send({ type: 'payment', data: { id: String(p.id) } });
     assert.equal(good.status, 200);
     assert.equal((await chargeRow(c)).status, 'paid');
@@ -333,5 +353,53 @@ describe('Mercado Pago', () => {
     await pool.query('UPDATE online_checkouts SET created_at = NOW() - INTERVAL 3 DAY WHERE id = :id', { id: co4.checkout_id });
     assert.ok(await require('../src/modules/online/online.service').expireStale() >= 1);
     assert.equal(ok(await api('get', `/online-payments/${co4.checkout_id}`, T.student)).status, 'expired');
+  });
+});
+
+// ===========================================================================
+describe('credenciales de prueba y reales por separado', () => {
+  const hdr = { 'paypal-transmission-sig': 'firma-buena', 'paypal-auth-algo': 'x', 'paypal-cert-url': 'x', 'paypal-transmission-id': 't', 'paypal-transmission-time': 'now' };
+  let sandboxCo; let sandboxOrder;
+
+  test('un pago iniciado en prueba se confirma con las credenciales de prueba aunque se cambie a real', async () => {
+    const c = await charge(400);
+    sandboxCo = ok(await api('post', '/online-payments/checkout', T.student, { provider: 'paypal', charge_ids: [c] }), 201);
+    sandboxOrder = [...fake.orders.keys()].at(-1);
+    assert.equal(sandboxCo.test_mode, true);
+
+    const s = ok(await api('patch', '/dojo/payment-settings', T.admin, {
+      paypal_live_client_id: 'lcid', paypal_live_secret: 'lsec', paypal_live_webhook_id: 'WH-LIVE', paypal_mode: 'live',
+    }));
+    assert.equal(s.paypal_mode, 'live');
+    assert.equal(s.paypal_test_client_id, 'cid'); // las de prueba siguen guardadas
+    assert.equal(s.paypal_test_secret_set, 1);
+    assert.equal(ok(await api('get', '/online-payments/options', T.student)).find((o) => o.provider === 'paypal').test_mode, false);
+
+    fake.orders.get(sandboxOrder).status = 'APPROVED';
+    const r = ok(await api('post', `/online-payments/${sandboxCo.checkout_id}/confirm`, T.student, {}));
+    assert.equal(r.status, 'completed');
+    assert.equal(fake.lastPaypalToken, 'tok');
+    assert.equal((await chargeRow(c)).status, 'paid');
+  });
+
+  test('los pagos nuevos usan las credenciales reales y su aviso se verifica con su Webhook ID', async () => {
+    const c = await charge(450);
+    const co = ok(await api('post', '/online-payments/checkout', T.student, { provider: 'paypal', charge_ids: [c] }), 201);
+    assert.equal(co.test_mode, false);
+    assert.equal(fake.lastPaypalToken, 'tok-live');
+    const orderId = [...fake.orders.keys()].at(-1);
+    fake.orders.get(orderId).status = 'APPROVED';
+    const event = { id: 'WH-EVT-LIVE', event_type: 'CHECKOUT.ORDER.APPROVED', resource: { id: orderId } };
+    assert.equal((await request(app).post('/api/v2/online-payments/webhooks/paypal/1/live').set(hdr).send(event)).status, 200);
+    assert.equal(fake.lastWebhookId, 'WH-LIVE');
+    assert.equal((await chargeRow(c)).status, 'paid');
+    const [[p]] = await pool.query("SELECT notes FROM payments WHERE provider = 'paypal' ORDER BY id DESC LIMIT 1");
+    assert.doesNotMatch(p.notes, /prueba/);
+  });
+
+  test('volver a prueba no borra las reales', async () => {
+    const s = ok(await api('patch', '/dojo/payment-settings', T.admin, { paypal_mode: 'sandbox' }));
+    assert.equal(s.paypal_live_client_id, 'lcid');
+    assert.equal(s.paypal_live_secret_set, 1);
   });
 });

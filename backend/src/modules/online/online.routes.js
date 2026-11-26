@@ -5,8 +5,9 @@
  *   POST /checkout                        { provider, charge_ids, user_id?, return_base? } → { redirect_url, … }
  *   GET  /:id                             estado del pago
  *   POST /:id/confirm                     al regresar del proveedor: verifica y registra
- *   POST /webhooks/paypal/:dojoId         aviso de PayPal (sin sesión: se verifica la firma)
- *   POST /webhooks/mercadopago/:dojoId    aviso de Mercado Pago (sin sesión: se verifica la firma)
+ *   POST /webhooks/paypal/:dojoId/:mode         aviso de PayPal (sin sesión: se verifica la firma)
+ *   POST /webhooks/mercadopago/:dojoId/:mode    aviso de Mercado Pago (sin sesión: se verifica la firma)
+ *        mode = test | live: con qué juego de credenciales se verifica. Sin él, el ambiente activo.
  */
 const express = require('express');
 const { z } = require('zod');
@@ -20,25 +21,34 @@ const id = z.coerce.number().int().positive();
 const STAFF = ['owner', 'admin', 'staff'];
 
 // --- Avisos de los proveedores (antes de exigir sesión) ---
-router.post('/webhooks/paypal/:dojoId', validate({ params: z.object({ dojoId: id }) }), async (req, res) => {
+const hookParams = validate({ params: z.object({ dojoId: id, mode: z.enum(['test', 'live']).optional() }) });
+
+async function paypalHook(req, res) {
   try {
-    const r = await svc.paypalWebhook(req.valid.params.dojoId, req.headers, req.body);
+    const { dojoId, mode } = req.valid.params;
+    const r = await svc.paypalWebhook(dojoId, mode, req.headers, req.body);
     res.status(r.verified === false ? 400 : 200).json({ received: true });
   } catch (e) {
     console.error('[pagos] aviso PayPal:', e.message);
     res.status(500).json({ received: false }); // el proveedor lo reintenta
   }
-});
+}
 
-router.post('/webhooks/mercadopago/:dojoId', validate({ params: z.object({ dojoId: id }) }), async (req, res) => {
+async function mercadopagoHook(req, res) {
   try {
-    const r = await svc.mercadopagoWebhook(req.valid.params.dojoId, { headers: req.headers, query: req.query, body: req.body });
+    const { dojoId, mode } = req.valid.params;
+    const r = await svc.mercadopagoWebhook(dojoId, mode, { headers: req.headers, query: req.query, body: req.body });
     res.status(r.verified === false ? 400 : 200).json({ received: true });
   } catch (e) {
     console.error('[pagos] aviso Mercado Pago:', e.message);
     res.status(500).json({ received: false });
   }
-});
+}
+
+router.post('/webhooks/paypal/:dojoId/:mode', hookParams, paypalHook);
+router.post('/webhooks/paypal/:dojoId', hookParams, paypalHook);
+router.post('/webhooks/mercadopago/:dojoId/:mode', hookParams, mercadopagoHook);
+router.post('/webhooks/mercadopago/:dojoId', hookParams, mercadopagoHook);
 
 router.use(authenticate, requireDojo);
 
