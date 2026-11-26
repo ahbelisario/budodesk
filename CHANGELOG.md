@@ -7,6 +7,10 @@ Formato: `MAYOR.MENOR.PARCHE`.
 
 Cada versión se crea con `./release.sh` y queda marcada en git como `vX.Y.Z`.
 
+## [1.0.13] - 2026-11-26
+
+- budodesk.com sin dojo: el dojo por omisión solo aplica en local
+
 ## [1.0.12] - 2026-11-26
 
 - Registro de dojos con prueba gratis y solo lectura al vencer
