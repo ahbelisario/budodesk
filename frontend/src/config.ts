@@ -16,15 +16,36 @@ export function detectDojoSlug(): string | null {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const fromQuery = new URLSearchParams(window.location.search).get('dojo');
     if (fromQuery) return fromQuery;
-    const host = window.location.hostname;
-    const parts = host.split('.');
-    const local = host === 'localhost' || !host.includes('.') || /^\d+(\.\d+){3}$/.test(host);
-    if (!local && parts.length >= 3 && !RESERVED_SUBDOMAINS.has(parts[0])) return parts[0];
+    const fromHost = slugFromHost();
+    if (fromHost) return fromHost;
     // En un dominio real sin dojo (budodesk.com, www.budodesk.com) no se adivina:
     // es la entrada general de BudoDesk (registro de dojos, elegir dojo).
-    if (!local) return null;
+    if (!isLocalHost()) return null;
   }
   return process.env.EXPO_PUBLIC_DOJO_SLUG || null;
+}
+
+function isLocalHost() {
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
+  return host === 'localhost' || !host.includes('.') || /^\d+(\.\d+){3}$/.test(host);
+}
+
+/** Dojo tomado del subdominio (seikoukan.budodesk.com → "seikoukan"); null en local o sin subdominio */
+export function slugFromHost(): string | null {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || isLocalHost()) return null;
+  const parts = window.location.hostname.split('.');
+  return parts.length >= 3 && !RESERVED_SUBDOMAINS.has(parts[0]) ? parts[0] : null;
+}
+
+/**
+ * El subdominio no es de ningún dojo (prueba123.budodesk.com): manda a la entrada general,
+ * al registro, con esa dirección ya escrita.
+ */
+export function redirectUnknownDojo(slug: string) {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  const { protocol, hostname, port } = window.location;
+  const parent = hostname.split('.').slice(1).join('.');
+  window.location.replace(`${protocol}//${parent}${port ? `:${port}` : ''}/signup?from=${encodeURIComponent(slug)}`);
 }
 
 /**

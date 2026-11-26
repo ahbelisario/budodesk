@@ -207,6 +207,14 @@ describe('fin de la prueba', () => {
     ok(await api('patch', '/dojo', token, { name: 'Karate Do del Norte AC' }));
   });
 
+  test('página pública: dojo inexistente 404, suspendido 403', async () => {
+    assert.equal((await api('get', '/account/dojos/no-existe-123')).status, 404);
+    await pool.query("UPDATE dojos SET status = 'suspended' WHERE id = ?", [dojoId]);
+    const r = await api('get', '/account/dojos/karate-norte');
+    assert.equal(r.status, 403); assert.equal(r.body.code, 'DOJO_UNAVAILABLE');
+    await pool.query("UPDATE dojos SET status = 'trial' WHERE id = ?", [dojoId]);
+  });
+
   test('activo (pagado) ya no vence', async () => {
     ok(await api('patch', `/platform/dojos/${dojoId}`, T.super, { status: 'active', plan: 'basic' }));
     await pool.query('UPDATE dojos SET trial_ends_at = ? WHERE id = ?', [today(-5), dojoId]);

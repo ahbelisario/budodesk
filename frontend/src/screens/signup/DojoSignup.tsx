@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { signupApi, type SignupConfig, type SlugStatus } from '../../api/signup';
 import { dojoHost } from '../../config';
 import { AuthLayout } from '../../ui/AuthLayout';
@@ -45,16 +45,20 @@ type Form = {
 
 export function DojoSignupScreen() {
   useLanguage();
+  // ?from=prueba123: alguien entró a prueba123.budodesk.com y ese dojo no existe
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const fromSlug = typeof from === 'string' && SLUG_RE.test(from) ? from : null;
   const [config, setConfig] = useState<SignupConfig | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [v, setV] = useState<Form>(() => {
     const tz = browserTz();
     return {
-      dojo_name: '', slug: '', city: '', country: 'MX', timezone: tz && TIMEZONES.includes(tz) ? tz : 'America/Mexico_City',
+      dojo_name: '', city: '', country: 'MX', timezone: tz && TIMEZONES.includes(tz) ? tz : 'America/Mexico_City',
       disciplines: '', students: '', first_name: '', last_name: '', email: '', phone: '', message: '', consent: false, website: '',
+      slug: fromSlug ?? '',
     };
   });
-  const [slugTouched, setSlugTouched] = useState(false);
+  const [slugTouched, setSlugTouched] = useState(!!fromSlug);
   const [slug, setSlug] = useState<{ checking: boolean; status: SlugStatus | null }>({ checking: false, status: null });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,6 +131,7 @@ export function DojoSignupScreen() {
   if (!config!.enabled) {
     return layout(
       <>
+        {fromSlug ? <Notice tone="info">{st('fromUnknownClosed', { url: dojoHost(fromSlug) })}</Notice> : null}
         <Text variant="title" accessibilityRole="header">{st('title')}</Text>
         <Notice tone="info">{st('closed')}</Notice>
         <SignInLink />
@@ -146,6 +151,7 @@ export function DojoSignupScreen() {
 
   return layout(
     <>
+      {fromSlug ? <Notice tone="info">{st('fromUnknown', { url: dojoHost(fromSlug) })}</Notice> : null}
       <View style={{ gap: 6 }}>
         <Text variant="title" accessibilityRole="header">{st('title')}</Text>
         <Text color={palette.ink2}>{config!.trial_days ? st('subtitle', { days: config!.trial_days }) : st('subtitleNoDays')}</Text>

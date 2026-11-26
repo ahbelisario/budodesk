@@ -70,7 +70,13 @@ account.get('/dojos/:slug', validate({ params: z.object({ slug: z.string().max(6
             self_registration, privacy_version, phone, email, website, city, state, facebook_url, instagram_url, tiktok_url,
             status = 'expired' AS read_only
        FROM dojos WHERE slug = :slug AND status IN ('trial','active','expired')`, { slug: req.valid.params.slug });
-  if (!d) return res.status(404).json({ status: 'error', code: 'NOT_FOUND', message: 'Dojo no encontrado' });
+  if (!d) {
+    // Existe pero está suspendido o cancelado: 403 (la app no lo confunde con una dirección libre)
+    if (await one(pool, 'SELECT id FROM dojos WHERE slug = :slug', { slug: req.valid.params.slug })) {
+      return res.status(403).json({ status: 'error', code: 'DOJO_UNAVAILABLE', message: 'Este dojo no está disponible por ahora' });
+    }
+    return res.status(404).json({ status: 'error', code: 'NOT_FOUND', message: 'Dojo no encontrado' });
+  }
   // En solo lectura no se aceptan registros nuevos
   ok(res, { ...d, read_only: !!d.read_only, self_registration: d.read_only ? 'closed' : d.self_registration });
 });
