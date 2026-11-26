@@ -7,6 +7,10 @@ Formato: `MAYOR.MENOR.PARCHE`.
 
 Cada versión se crea con `./release.sh` y queda marcada en git como `vX.Y.Z`.
 
+## [1.0.18] - 2026-11-26
+
+- Límites por plan: Básico (50 alumnos, 1 sede, sin finanzas) y Pro
+
 ## [1.0.17] - 2026-11-26
 
 - Monitoreo de la plataforma con alertas a correos configurables
