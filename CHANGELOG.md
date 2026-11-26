@@ -7,6 +7,10 @@ Formato: `MAYOR.MENOR.PARCHE`.
 
 Cada versión se crea con `./release.sh` y queda marcada en git como `vX.Y.Z`.
 
+## [1.0.10] - 2026-11-26
+
+- deploy.sh: aceptar el comando migrations y mostrar la ayuda completa
+
 ## [1.0.9] - 2026-11-26
 
 - Migraciones de esquema versionadas
