@@ -216,13 +216,21 @@ dojo.get('/audit-log', requireRole('admin'), validate({
   query: z.object({ entity: z.string().max(50).optional(), entity_id: z.string().max(50).optional(), limit: z.coerce.number().int().min(1).max(200).default(50) }),
 }), async (req, res) => {
   const q = req.valid.query;
+  // Lo que hace la plataforma con el dojo (alta, aprobación de la solicitud, plan, estado, fin de
+  // prueba) es administración de BudoDesk: solo lo ve el superadmin. Incluye los registros de antes
+  // de 'platform_dojo' (entity 'dojo' con create/expire, o update con plan/estado/prueba).
+  const PLATFORM = `(a.entity IN ('platform_dojo','dojo_signup')
+      OR (a.entity = 'dojo' AND a.action IN ('create','expire'))
+      OR (a.entity = 'dojo' AND a.action = 'update'
+          AND JSON_CONTAINS_PATH(a.after_data, 'one', '$.plan', '$.status', '$.trial_ends_at')))`;
   const rows = await req.tdb.query(
     `SELECT a.id, a.action, a.entity, a.entity_id, a.before_data, a.after_data, a.created_at,
-            CONCAT_WS(' ', p.first_name, p.last_name) AS user_name
+            CONCAT_WS(' ', p.first_name, p.last_name) AS user_name, ${PLATFORM} AS platform
        FROM audit_log a LEFT JOIN user_profiles p ON p.user_id = a.user_id
-      WHERE a.dojo_id = :dojoId ${q.entity ? 'AND a.entity = :entity' : ''} ${q.entity_id ? 'AND a.entity_id = :eid' : ''}
+      WHERE a.dojo_id = :dojoId ${req.auth.isSuperadmin ? '' : `AND NOT ${PLATFORM}`}
+            ${q.entity ? 'AND a.entity = :entity' : ''} ${q.entity_id ? 'AND a.entity_id = :eid' : ''}
       ORDER BY a.id DESC LIMIT :limit`, { entity: q.entity, eid: q.entity_id, limit: q.limit });
-  res.json({ status: 'success', data: rows });
+  res.json({ status: 'success', data: rows.map((r) => ({ ...r, platform: !!r.platform })) });
 });
 
 // ===========================================================================

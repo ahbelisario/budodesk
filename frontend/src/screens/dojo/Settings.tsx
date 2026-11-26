@@ -361,7 +361,10 @@ function ActivityTab() {
         <View key={r.id}>
           {i > 0 ? <Divider /> : null}
           <View style={{ paddingVertical: space.xs, gap: 2 }}>
-            <Text variant="body"><Text variant="bodyStrong">{r.user_name ?? '—'}</Text> · {r.action} · {r.entity}{r.entity_id ? ` #${r.entity_id}` : ''}</Text>
+            <Text variant="body">
+              {r.platform ? <Text variant="smallStrong" color={palette.ink2}>{`${dt('platformEntry')} · `}</Text> : null}
+              <Text variant="bodyStrong">{r.user_name ?? (r.platform ? 'BudoDesk' : '—')}</Text> · {r.action} · {r.entity}{r.entity_id ? ` #${r.entity_id}` : ''}
+            </Text>
             <Text variant="caption" color={palette.ink2}>{dateTimeShort(r.created_at)}</Text>
           </View>
         </View>

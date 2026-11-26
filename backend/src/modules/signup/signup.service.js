@@ -278,7 +278,7 @@ async function trialSweep(now = new Date()) {
         "UPDATE dojos SET status = 'expired', trial_notices = :n WHERE id = :id AND status = 'trial'",
         { id: d.id, n: [...sent, 'expired'].join(',') });
       if (!u.affectedRows) continue;
-      await audit(pool, { dojoId: d.id, userId: null, action: 'expire', entity: 'dojo', entityId: d.id, after: { trial_ends_at: d.ends } });
+      await audit(pool, { dojoId: d.id, userId: null, action: 'expire', entity: 'platform_dojo', entityId: d.id, after: { trial_ends_at: d.ends } });
       result.expired += 1;
     } else if (notice) {
       await pool.query('UPDATE dojos SET trial_notices = :n WHERE id = :id', { id: d.id, n: [...sent, notice].join(',') });

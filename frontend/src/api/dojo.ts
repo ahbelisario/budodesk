@@ -39,7 +39,9 @@ export type OnlineSettingsPatch = Slotted<string | null> & {
 };
 export type ProviderTest = { mode: CredSlot; client_id?: string; secret?: string; access_token?: string };
 export type Location = { id: number; name: string; address: string | null; active: number };
-export type AuditEntry = { id: number; action: string; entity: string; entity_id: string | null; before_data: unknown; after_data: unknown; created_at: string; user_name: string | null };
+export type AuditEntry = { id: number; action: string; entity: string; entity_id: string | null; before_data: unknown; after_data: unknown; created_at: string; user_name: string | null;
+  /** Acción de la plataforma (solo la ve el superadmin) */
+  platform?: boolean };
 
 export const dojoApi = {
   announcements: (includeExpired = false) => api.get<AnnouncementFull[]>('/announcements', includeExpired ? { include_expired: true } : undefined),

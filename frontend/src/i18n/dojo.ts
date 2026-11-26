@@ -99,6 +99,7 @@ export const dojoEs = {
   activity: 'Actividad reciente',
   activityHint: 'Cambios importantes hechos por el personal del dojo.',
   noActivity: 'Sin actividad registrada.',
+  platformEntry: 'Plataforma',
   save: 'Guardar cambios',
 };
 
@@ -201,5 +202,6 @@ export const dojoEn: Shape<typeof dojoEs> = {
   activity: 'Recent activity',
   activityHint: 'Important changes made by dojo staff.',
   noActivity: 'No activity recorded.',
+  platformEntry: 'Platform',
   save: 'Save changes',
 };

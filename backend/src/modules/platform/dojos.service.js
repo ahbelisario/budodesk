@@ -115,7 +115,7 @@ async function createDojo(b, actorId, ip) {
       { d: dojoId, u: owner.id, by: actorId });
 
     await audit(conn, {
-      dojoId, userId: actorId, action: 'create', entity: 'dojo', entityId: dojoId, ip,
+      dojoId, userId: actorId, action: 'create', entity: 'platform_dojo', entityId: dojoId, ip,
       after: { slug, name: b.name, plan: b.plan, status: b.status, owner: email, copied_from: b.copy_from_dojo_id || null, copied },
     });
     return { dojoId, ownerId: owner.id, ownerCreated, needsPassword: !owner.password_hash, copied };
@@ -148,7 +148,7 @@ async function updateDojo(id, b, actorId, ip) {
     `UPDATE dojos SET name = :name, short_name = :short_name, plan = :plan, status = :status, trial_ends_at = :trial_ends_at,
             trial_notices = IF(:reset, '', trial_notices)
       WHERE id = :id`, { ...next, trial_ends_at: ymd(next.trial_ends_at), reset: resetNotices ? 1 : 0, id });
-  await audit(pool, { dojoId: id, userId: actorId, action: 'update', entity: 'dojo', entityId: id, ip, before: prev, after: b });
+  await audit(pool, { dojoId: id, userId: actorId, action: 'update', entity: 'platform_dojo', entityId: id, ip, before: prev, after: b });
   return getDojo(id, actorId);
 }
 

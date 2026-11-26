@@ -215,6 +215,20 @@ describe('fin de la prueba', () => {
     await pool.query("UPDATE dojos SET status = 'trial' WHERE id = ?", [dojoId]);
   });
 
+  test('la bitácora del dojo no muestra lo de la plataforma, salvo al superadmin', async () => {
+    const token = await login('laura@karatenorte.mx', 'Karate-Norte-2026', { dojo_slug: 'karate-norte' });
+    ok(await api('patch', '/dojo', token, { name: 'Karate Do del Norte' }));
+    const own = ok(await api('get', '/dojo/audit-log', token));
+    assert.ok(own.length > 0, 've su propia actividad');
+    assert.ok(own.every((r) => !r.platform && !['dojo_signup', 'platform_dojo'].includes(r.entity)), JSON.stringify(own));
+    // superadmin en modo soporte: ve todo, marcado
+    const sup = ok(await api('post', '/auth/switch-dojo', T.super, { dojo_id: dojoId })).access_token;
+    const all = ok(await api('get', '/dojo/audit-log', sup));
+    assert.ok(all.some((r) => r.platform && r.entity === 'dojo_signup'));
+    assert.ok(all.some((r) => r.platform && r.entity === 'platform_dojo'));
+    assert.ok(all.length > own.length);
+  });
+
   test('activo (pagado) ya no vence', async () => {
     ok(await api('patch', `/platform/dojos/${dojoId}`, T.super, { status: 'active', plan: 'basic' }));
     await pool.query('UPDATE dojos SET trial_ends_at = ? WHERE id = ?', [today(-5), dojoId]);
