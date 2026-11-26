@@ -411,6 +411,28 @@ describe('clases y reservas', () => {
     await pool.query('UPDATE dojos SET booking_window_days = 14 WHERE id = 1');
   });
 
+  test('listado de clases: encuentra una clase movida a una fecha vieja', async () => {
+    const [[s]] = await pool.query('SELECT id FROM class_sessions WHERE series_id = ? ORDER BY session_date DESC LIMIT 1', [ids.series]);
+    ok(await api('patch', `/classes/sessions/${s.id}`, T.admin, { session_date: '2019-03-04', title: 'Clase movida' }));
+    // Editadas: la última edición primero, aunque la fecha sea de hace años
+    const edited = (await api('get', '/classes/sessions/list?view=edited', T.admin));
+    assert.equal(edited.status, 200);
+    assert.equal(edited.body.data[0].id, s.id);
+    assert.ok(edited.body.data[0].edited_at);
+    // Pasadas y búsqueda
+    const past = ok(await api('get', '/classes/sessions/list?view=past&q=movida', T.admin));
+    assert.deepEqual(past.map((x) => x.id), [s.id]);
+    assert.equal(past[0].session_date, '2019-03-04');
+    // Próximas: de hoy en adelante, en orden
+    const up = await api('get', '/classes/sessions/list?view=upcoming&page_size=5', T.admin);
+    assert.ok(up.body.data.every((x) => x.session_date >= today()));
+    assert.ok(up.body.meta.total > 5);
+    assert.equal(up.body.data.length, 5);
+    // Solo el personal
+    assert.equal((await api('get', '/classes/sessions/list', T.student)).status, 403);
+    assert.equal((await api('get', '/classes/sessions/list', T.instructor)).status, 200);
+  });
+
   test('el tutor reserva por su hijo; un alumno no puede reservar por otro', async () => {
     const ok1 = await api('post', `/classes/sessions/${ids.session}/book`, T.mama, { user_id: ids.nino });
     assert.ok([201, 422].includes(ok1.status)); // 422 si el plan familiar no cubre la fecha; lo importante es el permiso

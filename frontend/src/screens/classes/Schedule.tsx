@@ -5,7 +5,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { classesApi, addDaysYmd, mondayOf, parseYmd, todayYmd, type Session } from '../../api/classes';
 import { useSession } from '../../session/SessionProvider';
 import { useApi } from '../../utils/useApi';
@@ -13,7 +13,8 @@ import { errorMessage } from '../../utils/errors';
 import { Screen } from '../../ui/Screen';
 import { Badge, Button, Card, EmptyState, IconButton, Loading, Notice, Text } from '../../ui/primitives';
 import { Dialog } from '../../ui/Dialog';
-import { FilterChips, SwitchRow } from '../../ui/forms';
+import { FilterChips, SwitchRow, Tabs } from '../../ui/forms';
+import { SessionList } from './SessionList';
 import { palette, radius, space } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useIsWide } from '../../navigation/AppShell';
@@ -110,6 +111,11 @@ export function Schedule() {
   const uid = staffView ? user!.id : (actingUserId ?? user!.id);
   const actingName = uid === user?.id ? null : minors.find((m) => m.user_id === uid)?.first_name ?? null;
 
+  // Semana (calendario) o lista (solo personal). En la URL, para volver a la lista desde el detalle.
+  const params = useLocalSearchParams<{ view?: string }>();
+  const listMode = staffView && params.view === 'list';
+  const setMode = (m: 'week' | 'list') => router.setParams({ view: m === 'list' ? 'list' : undefined } as never);
+
   const [monday, setMonday] = useState(mondayOf(todayYmd()));
   const [day, setDay] = useState(todayYmd());
   const [disc, setDisc] = useState<string>('all');
@@ -119,14 +125,14 @@ export function Schedule() {
   const opts = useClassOptions(manage);
 
   const sunday = addDaysYmd(monday, 6);
-  const data = useApi(() => classesApi.sessions({
+  const data = useApi(() => (listMode ? Promise.resolve(null) : classesApi.sessions({
     from: monday, to: sunday,
     user_id: staffView ? undefined : uid,
     discipline_id: disc !== 'all' ? Number(disc) : undefined,
     instructor_id: staffView && onlyMine ? user!.id : undefined,
     only_fit: !staffView && onlyFit ? true : undefined,
     include_cancelled: true,
-  }), [monday, disc, onlyMine, onlyFit, uid]);
+  })), [monday, disc, onlyMine, onlyFit, uid, listMode]);
   const bk = useBooking(uid, () => data.reload(), data.data?.meta.cancel_hours ?? 12);
 
   // Al cambiar de semana, en celular se elige hoy (si cae en la semana) o el lunes
@@ -153,7 +159,7 @@ export function Schedule() {
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: space.md, flexWrap: 'wrap' }}>
         <View style={{ gap: 2 }}>
           <Text variant="title" accessibilityRole="header">{ct('title')}</Text>
-          <Text variant="small" color={palette.ink2}>{ct('week', { from: dayShort(monday), to: dayShort(sunday) })}</Text>
+          {!listMode ? <Text variant="small" color={palette.ink2}>{ct('week', { from: dayShort(monday), to: dayShort(sunday) })}</Text> : null}
         </View>
         {manage ? (
           <View style={{ flexDirection: 'row', gap: space.xs, flexWrap: 'wrap' }}>
@@ -165,6 +171,12 @@ export function Schedule() {
 
       {!staffView ? <ViewAs /> : null}
 
+      {staffView ? (
+        <Tabs value={listMode ? 'list' : 'week'} onChange={setMode}
+          tabs={[{ key: 'week', label: ct('viewWeek') }, { key: 'list', label: ct('viewList') }]} />
+      ) : null}
+
+      {listMode ? <SessionList disciplines={discOptions} /> : (<>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, flexWrap: 'wrap' }}>
         <IconButton icon="chevron-left" label={ct('prevWeek')} onPress={() => setMonday(addDaysYmd(monday, -7))} />
         <Button label={ct('thisWeek')} size="sm" variant={monday === mondayOf(today) ? 'dark' : 'secondary'} onPress={() => setMonday(mondayOf(today))} />
@@ -226,6 +238,7 @@ export function Schedule() {
           )) : <Text color={palette.ink2}>{ct('noClassesDay')}</Text>}
         </>
       )}
+      </>)}
 
       {bk.dialog}
       {manage ? <SessionDialog visible={newOpen} session={null} defaultDate={wide ? undefined : day} onClose={() => setNewOpen(false)}

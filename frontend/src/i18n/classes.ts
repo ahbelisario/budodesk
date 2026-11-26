@@ -1,6 +1,16 @@
 /** Textos de clases: horario, sesión, pase de lista, horarios recurrentes */
 export const classesEs = {
   title: 'Clases',
+  viewWeek: 'Semana', viewList: 'Lista',
+  lv_upcoming: 'Próximas', lv_past: 'Pasadas', lv_all: 'Todas', lv_edited: 'Editadas',
+  lv_editedHint: 'Clases cambiadas a mano, la última edición primero: aquí aparece una clase que se movió de fecha.',
+  listSearch: 'Buscar por clase, disciplina, instructor o sede',
+  listCancelled: 'Incluir canceladas',
+  listCount: { one: '1 clase', other: '%{count} clases' },
+  listEmpty: 'No hay clases con estos filtros',
+  listMore: 'Ver más',
+  editedAt: 'Editada %{when}',
+  listBooked: { one: '1 reserva', other: '%{count} reservas' },
   week: 'Semana del %{from} al %{to}',
   thisWeek: 'Esta semana',
   prevWeek: 'Semana anterior',
@@ -136,6 +146,16 @@ type Shape<T> = { [K in keyof T]: T[K] extends string ? string : Shape<T[K]> };
 
 export const classesEn: Shape<typeof classesEs> = {
   title: 'Classes',
+  viewWeek: 'Week', viewList: 'List',
+  lv_upcoming: 'Upcoming', lv_past: 'Past', lv_all: 'All', lv_edited: 'Edited',
+  lv_editedHint: 'Classes changed by hand, latest edit first: a class that was moved to another date shows up here.',
+  listSearch: 'Search by class, discipline, instructor or location',
+  listCancelled: 'Include cancelled',
+  listCount: { one: '1 class', other: '%{count} classes' },
+  listEmpty: 'No classes match these filters',
+  listMore: 'Show more',
+  editedAt: 'Edited %{when}',
+  listBooked: { one: '1 booking', other: '%{count} bookings' },
   week: 'Week of %{from} – %{to}',
   thisWeek: 'This week',
   prevWeek: 'Previous week',

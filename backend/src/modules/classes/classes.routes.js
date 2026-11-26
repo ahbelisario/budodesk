@@ -246,6 +246,68 @@ router.get('/sessions', validate({
   });
 });
 
+/**
+ * GET /classes/sessions/list — listado de clases para el personal, sin límite de fechas.
+ *   view: upcoming (de hoy en adelante) · past · all · edited (editadas a mano, la última edición primero)
+ *   q: busca en título, disciplina, instructor y sede · discipline_id · include_cancelled · page/page_size
+ * Sirve para encontrar una clase que se movió a otra fecha.
+ */
+router.get('/sessions/list', requireRole(...STAFF), validate({
+  query: z.object({
+    view: z.enum(['upcoming', 'past', 'all', 'edited']).default('upcoming'),
+    q: z.string().trim().max(100).optional(),
+    discipline_id: id.optional(),
+    include_cancelled: z.stringbool().optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    page_size: z.coerce.number().int().min(1).max(100).default(30),
+  }),
+}), async (req, res) => {
+  const q = req.valid.query;
+  const dojo = await getDojo(req);
+  const today = todayIn(dojo.timezone);
+  const where = ['s.dojo_id = :dojoId'];
+  if (q.view === 'upcoming') where.push('s.session_date >= :today');
+  if (q.view === 'past') where.push('s.session_date < :today');
+  if (q.view === 'edited') where.push('s.is_modified = 1');
+  if (!q.include_cancelled) where.push("s.status <> 'cancelled'");
+  if (q.discipline_id) where.push('s.discipline_id = :disc');
+  if (q.q) {
+    where.push(`(s.title LIKE :like OR d.name LIKE :like OR l.name LIKE :like
+                 OR CONCAT_WS(' ', ip.first_name, ip.last_name) LIKE :like)`);
+  }
+  const order = {
+    upcoming: 's.session_date, s.start_time',
+    past: 's.session_date DESC, s.start_time DESC',
+    all: 's.session_date DESC, s.start_time DESC',
+    edited: 'edited_at IS NULL, edited_at DESC, s.updated_at DESC',
+  }[q.view];
+  // Última edición a mano (de la bitácora; updated_at también cambia con cada reserva)
+  const EDITED = `(SELECT MAX(a.created_at) FROM audit_log a WHERE a.dojo_id = s.dojo_id AND a.entity = 'class_session'
+                    AND a.action = 'update' AND a.entity_id = s.id)`;
+  const params = { today, disc: q.discipline_id, like: q.q ? `%${q.q.replace(/[%_\\]/g, '\\$&')}%` : null };
+  const base = SESSION_SELECT.replace('FROM class_sessions s', `, ${EDITED} AS edited_at\n    FROM class_sessions s`);
+  const [rows, [{ total }]] = await Promise.all([
+    req.tdb.query(`${base} WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT :limit OFFSET :offset`,
+      { ...params, limit: q.page_size, offset: (q.page - 1) * q.page_size }),
+    req.tdb.query(
+      `SELECT COUNT(*) AS total FROM class_sessions s
+         LEFT JOIN disciplines d ON d.dojo_id = s.dojo_id AND d.id = s.discipline_id
+         LEFT JOIN dojo_locations l ON l.dojo_id = s.dojo_id AND l.id = s.location_id
+         LEFT JOIN user_profiles ip ON ip.user_id = s.instructor_id
+        WHERE ${where.join(' AND ')}`, params),
+  ]);
+  const now = new Date();
+  res.json({
+    status: 'success',
+    data: rows.map((s) => ({
+      ...s,
+      is_past: zonedToUtc(s.session_date, s.end_time, dojo.timezone) <= now,
+      spots_left: s.capacity == null ? null : Math.max(0, s.capacity - s.booked_count),
+    })),
+    meta: { page: q.page, page_size: q.page_size, total, total_pages: Math.max(1, Math.ceil(total / q.page_size)), today },
+  });
+});
+
 router.get('/sessions/:id', validate({ params: z.object({ id }) }), async (req, res) => {
   const s = await req.tdb.one(`${SESSION_SELECT} WHERE s.dojo_id = :dojoId AND s.id = :id`, { id: req.valid.params.id });
   if (!s) throw notFound('Clase no encontrada');

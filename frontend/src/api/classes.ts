@@ -33,7 +33,16 @@ export type SessionInput = {
   session_date?: string; start_time?: string; end_time?: string; capacity?: number | null; notes?: string | null;
 };
 
+export type ListView = 'upcoming' | 'past' | 'all' | 'edited';
+export type ListedSession = Omit<Session, 'my_booking' | 'my_waitlist_position' | 'starts_at' | 'ends_at' | 'can_cancel_free' | 'fits' | 'misfit_reason'> & {
+  is_modified: number; edited_at: string | null;
+};
+export type ListMeta = { page: number; page_size: number; total: number; total_pages: number; today: string };
+
 export const classesApi = {
+  /** Listado para el personal, sin límite de fechas (sirve para encontrar una clase movida) */
+  sessionsList: (q: { view: ListView; q?: string; discipline_id?: number; include_cancelled?: boolean; page?: number; page_size?: number }) =>
+    api.getPage<ListedSession[]>('/classes/sessions/list', q).then((r) => ({ data: r.data, meta: r.meta as ListMeta })),
   sessions: (q: { from: string; to: string; user_id?: number; discipline_id?: number; instructor_id?: number; only_fit?: boolean; include_cancelled?: boolean }) =>
     api.getPage<Session[]>('/classes/sessions', q).then((r) => ({ data: r.data, meta: r.meta as SessionsMeta })),
   session: (id: number) => api.get<SessionDetail>(`/classes/sessions/${id}`),
