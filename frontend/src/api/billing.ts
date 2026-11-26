@@ -46,7 +46,7 @@ export type ChargeRow = {
 };
 export type PaymentRow = {
   id: number; user_id: number; user_name: string; amount: number; currency: string; method: string; status: string; paid_at: string;
-  reference: string | null; receipt_url: string | null; provider: string | null; refunded_amount: number; notes: string | null; received_by_name: string | null;
+  reference: string | null; receipt_url: string | null; provider: string | null; provider_fee?: number | null; refunded_amount: number; notes: string | null; received_by_name: string | null;
 };
 export type MyAccount = {
   summary: { balance_due: number; overdue: number; next_due_date: string | null; credit: number };

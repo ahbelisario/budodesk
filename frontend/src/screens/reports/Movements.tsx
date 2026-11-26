@@ -304,7 +304,7 @@ export function MovementsTab() {
               <Icon name="percent" size={18} color={palette.ink2} />
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Text variant="bodyStrong" numberOfLines={1}>{rt('onlineFees')}</Text>
-                <Text variant="caption" color={palette.ink2} numberOfLines={1}>{rt('fromBilling')}</Text>
+                <Text variant="caption" color={palette.ink2} numberOfLines={1}>{rt('feesHint')}</Text>
               </View>
               <Text variant="bodyStrong">−{money(tuition.online_fees, cur)}</Text>
               <Icon name="chevron-right" size={18} color={palette.ink3} />

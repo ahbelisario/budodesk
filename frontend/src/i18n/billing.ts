@@ -163,6 +163,7 @@ export const billingEs = {
   overdueSince: 'Vencido desde %{date}',
   paidOf: 'Pagado %{paid} de %{total}',
   receivedBy: 'Recibió %{name}',
+  providerFee: 'Comisión %{name}: %{amount}',
   cancelledPayment: 'Cancelado',
 
   // Estado de cuenta (alumno)
@@ -346,6 +347,7 @@ export const billingEn: Shape<typeof billingEs> = {
   overdueSince: 'Overdue since %{date}',
   paidOf: 'Paid %{paid} of %{total}',
   receivedBy: 'Received by %{name}',
+  providerFee: '%{name} fee: %{amount}',
   cancelledPayment: 'Cancelled',
 
   myPayments: 'Payments',

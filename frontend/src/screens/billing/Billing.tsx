@@ -227,7 +227,8 @@ function PaymentsTab({ onChanged, version, initialMonth }: { onChanged: () => vo
                 <Pressable accessibilityRole="link" onPress={() => router.push(`/members/${p.user_id}?tab=billing` as never)} style={{ flex: 1, minWidth: 0 }}>
                   <Text variant="bodyStrong" numberOfLines={1}>{p.user_name}</Text>
                   <Text variant="caption" color={palette.ink2} numberOfLines={2}>
-                    {[dateTimeShort(p.paid_at), t(`members.m_${p.method}`), p.reference, p.received_by_name ? bt('receivedBy', { name: p.received_by_name }) : null].filter(Boolean).join(' · ')}
+                    {[dateTimeShort(p.paid_at), t(`members.m_${p.method}`), p.reference, p.received_by_name ? bt('receivedBy', { name: p.received_by_name }) : null,
+                      Number(p.provider_fee) > 0 ? bt('providerFee', { name: t(`members.m_${p.method}`), amount: money(Number(p.provider_fee), p.currency) }) : null].filter(Boolean).join(' · ')}
                   </Text>
                 </Pressable>
                 <View style={{ alignItems: 'flex-end', gap: 4, flexDirection: wide ? 'row' : 'column', ...(wide ? { alignItems: 'center', gap: space.sm } : {}) }}>
