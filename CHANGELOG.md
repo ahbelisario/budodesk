@@ -7,6 +7,11 @@ Formato: `MAYOR.MENOR.PARCHE`.
 
 Cada versión se crea con `./release.sh` y queda marcada en git como `vX.Y.Z`.
 
+## [1.0.17] - 2026-11-26
+
+- Monitoreo de la plataforma con alertas a correos configurables
+- Clases: vista de lista para el personal
+
 ## [1.0.16] - 2026-11-26
 
 - Plataforma: eliminar un dojo y el superadmin ve todos los dojos al cambiar
