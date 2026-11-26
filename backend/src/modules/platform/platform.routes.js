@@ -4,6 +4,10 @@
  *   GET    /dojos                 lista con métricas
  *   POST   /dojos                 alta de dojo (+ dueño, + copiar configuración)
  *   PATCH  /dojos/:id             nombre, plan, estado, fin de prueba
+ *   GET    /signups               solicitudes de registro (?status=pending|approved|rejected|all) + ajustes
+ *   PUT    /signups/settings      aceptar registros, días de prueba
+ *   POST   /signups/:id/approve   crea el dojo en prueba y avisa al dueño
+ *   POST   /signups/:id/reject    rechaza (aviso opcional)
  *   GET    /backups               ajustes + listado
  *   PUT    /backups/settings      ajustes de respaldos y S3
  *   POST   /backups/run           respaldar ahora
@@ -19,12 +23,13 @@ const { forbidden } = require('../../utils/errors');
 const { audit } = require('../../utils/audit');
 const dojos = require('./dojos.service');
 const backups = require('./backups.service');
+const signups = require('../signup/signup.service');
 
 const router = express.Router();
 const id = z.coerce.number().int().positive();
 const optStr = (n) => z.string().trim().max(n).nullish();
 const PLANS = ['trial', 'basic', 'pro'];
-const STATUSES = ['trial', 'active', 'suspended', 'cancelled'];
+const STATUSES = ['trial', 'active', 'expired', 'suspended', 'cancelled'];
 
 // --- Descarga (antes de exigir sesión: el navegador abre el enlace directo) ---
 router.get('/backups/download', async (req, res) => {
@@ -88,6 +93,44 @@ const updateSchema = z.object({
 
 router.patch('/dojos/:id', validate({ params: z.object({ id }), body: updateSchema }), async (req, res) => {
   res.json({ status: 'success', data: await dojos.updateDojo(req.valid.params.id, req.valid.body, req.auth.userId, req.ip) });
+});
+
+// ===========================================================================
+// Solicitudes de registro
+// ===========================================================================
+router.get('/signups', validate({ query: z.object({ status: z.enum(['pending', 'approved', 'rejected', 'all']).default('pending') }) }),
+  async (req, res) => {
+    const [settings, list] = await Promise.all([signups.platformSettings(), signups.listSignups(req.valid.query)]);
+    const [[{ pending }]] = await require('../../db/pool').pool.query(
+      "SELECT COUNT(*) AS pending FROM dojo_signups WHERE status = 'pending'");
+    res.json({ status: 'success', data: { settings, pending, signups: list } });
+  });
+
+router.put('/signups/settings', validate({
+  body: z.object({ signup_enabled: z.boolean().optional(), trial_days: z.coerce.number().int().min(1).max(365).optional() }),
+}), async (req, res) => {
+  res.json({ status: 'success', data: await signups.updateSettings(req.valid.body, req.auth.userId, req.ip) });
+});
+
+router.post('/signups/:id/approve', validate({
+  params: z.object({ id }),
+  body: z.object({
+    name: z.string().trim().min(2).max(255).optional(),
+    slug: z.string().trim().toLowerCase().regex(/^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/,
+      'Subdominio: 3 a 40 letras minúsculas, números o guiones (sin guion al inicio o al final)').optional(),
+    trial_days: z.coerce.number().int().min(1).max(365).optional(),
+    copy_from_dojo_id: id.nullish(),
+    note: optStr(500),
+  }),
+}), async (req, res) => {
+  res.status(201).json({ status: 'success', data: await signups.approve(req.valid.params.id, req.valid.body, req.auth.userId, req.ip) });
+});
+
+router.post('/signups/:id/reject', validate({
+  params: z.object({ id }),
+  body: z.object({ reason: optStr(500), notify: z.boolean().default(true) }),
+}), async (req, res) => {
+  res.json({ status: 'success', data: await signups.reject(req.valid.params.id, req.valid.body, req.auth.userId, req.ip) });
 });
 
 // ===========================================================================

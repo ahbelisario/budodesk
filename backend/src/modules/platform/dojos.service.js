@@ -3,6 +3,7 @@ const { pool, withTransaction, one } = require('../../db/pool');
 const { badRequest, conflict, notFound } = require('../../utils/errors');
 const { audit } = require('../../utils/audit');
 const accountService = require('../account/account.service');
+const { todayIn } = require('../../utils/dates');
 
 const RESERVED = new Set(['www', 'api', 'app', 'admin', 'dev', 'mail', 'smtp', 'static', 'assets', 'cdn', 'status',
   'docs', 'help', 'soporte', 'support', 'budodesk', 'platform', 'plataforma', 'staging', 'test', 'login', 'auth']);
@@ -133,14 +134,21 @@ async function createDojo(b, actorId, ip) {
 }
 
 async function updateDojo(id, b, actorId, ip) {
-  const before = await one(pool, 'SELECT id, name, short_name, plan, status, trial_ends_at FROM dojos WHERE id = :id', { id });
+  const before = await one(pool, 'SELECT id, name, short_name, plan, status, trial_ends_at, timezone FROM dojos WHERE id = :id', { id });
   if (!before) throw notFound('Dojo no encontrado');
-  const next = { ...before, ...b };
-  if (next.status !== 'trial') next.trial_ends_at = null;
+  const { timezone, ...prev } = before;
+  const next = { ...prev, ...b };
+  const ymd = (v) => (v ? (typeof v === 'string' ? v.slice(0, 10) : v.toISOString().slice(0, 10)) : null);
+  // Extender una prueba vencida (fecha de hoy en adelante) la reabre
+  if (next.status === 'expired' && ymd(next.trial_ends_at) && ymd(next.trial_ends_at) >= todayIn(timezone)) next.status = 'trial';
+  if (!['trial', 'expired'].includes(next.status)) next.trial_ends_at = null;
+  // Avisos de fin de prueba: empiezan de nuevo si cambió la fecha o volvió a prueba
+  const resetNotices = ymd(next.trial_ends_at) !== ymd(before.trial_ends_at) || (next.status === 'trial' && before.status !== 'trial');
   await pool.query(
-    `UPDATE dojos SET name = :name, short_name = :short_name, plan = :plan, status = :status, trial_ends_at = :trial_ends_at
-      WHERE id = :id`, { ...next, id });
-  await audit(pool, { dojoId: id, userId: actorId, action: 'update', entity: 'dojo', entityId: id, ip, before, after: b });
+    `UPDATE dojos SET name = :name, short_name = :short_name, plan = :plan, status = :status, trial_ends_at = :trial_ends_at,
+            trial_notices = IF(:reset, '', trial_notices)
+      WHERE id = :id`, { ...next, trial_ends_at: ymd(next.trial_ends_at), reset: resetNotices ? 1 : 0, id });
+  await audit(pool, { dojoId: id, userId: actorId, action: 'update', entity: 'dojo', entityId: id, ip, before: prev, after: b });
   return getDojo(id, actorId);
 }
 

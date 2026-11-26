@@ -1,4 +1,4 @@
-/** Panel de la plataforma (solo superadmin): dojos y respaldos */
+/** Panel de la plataforma (solo superadmin): dojos, solicitudes de registro y respaldos */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Platform as RNPlatform, Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -16,18 +16,21 @@ import { DateField, FormGrid, Select, SwitchRow, Tabs } from '../../ui/forms';
 import { useIsWide } from '../../navigation/AppShell';
 import { palette, radius, space } from '../../theme/tokens';
 import { getLanguage, t, useLanguage } from '../../i18n';
-import { dateTimeShort, dayShort } from '../../utils/format';
+import { dateTimeShort, dayShort, dayLong } from '../../utils/format';
+import { signupApi, type Signup, type SignupSettings, type SignupStatus } from '../../api/signup';
+import { dojoHost } from '../../config';
+import { FilterChips } from '../../ui/forms';
 
 const pt = (k: string, o?: Record<string, unknown>) => t(`platform.${k}`, o);
 type Msg = { tone: 'success' | 'danger'; text: string } | null;
-type TabKey = 'dojos' | 'backups';
+type TabKey = 'dojos' | 'signups' | 'backups';
 
 const TIMEZONES = ['America/Mexico_City', 'America/Monterrey', 'America/Chihuahua', 'America/Hermosillo', 'America/Mazatlan', 'America/Tijuana',
   'America/Cancun', 'America/Bogota', 'America/Lima', 'America/Santiago', 'America/Argentina/Buenos_Aires', 'America/New_York',
   'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/Madrid'];
 const CURRENCIES = ['MXN', 'USD', 'COP', 'PEN', 'CLP', 'ARS', 'EUR'];
 const PLANS: DojoPlan[] = ['trial', 'basic', 'pro'];
-const STATUS_TONE: Record<DojoStatus, Tone> = { trial: 'info', active: 'success', suspended: 'warning', cancelled: 'danger' };
+const STATUS_TONE: Record<DojoStatus, Tone> = { trial: 'info', active: 'success', expired: 'warning', suspended: 'warning', cancelled: 'danger' };
 const tzOptions = (cur?: string | null) => [...new Set([...(cur ? [cur] : []), ...TIMEZONES])].map((z) => ({ value: z, label: z.replace(/_/g, ' ') }));
 const DOMAIN = 'budodesk.com';
 
@@ -90,6 +93,7 @@ function DojoCard({ d, current, onEnter, onEdit, entering }: {
         <Text variant="small" color={palette.ink2}>
           {d.last_activity ? pt('lastActivity', { when: dateTimeShort(d.last_activity) }) : pt('noActivity')}
           {d.status === 'trial' && d.trial_ends_at ? ` · ${pt('trialUntil', { date: dayShort(String(d.trial_ends_at).slice(0, 10)) })}` : ''}
+          {d.status === 'expired' && d.trial_ends_at ? ` · ${pt('trialEnded', { date: dayShort(String(d.trial_ends_at).slice(0, 10)) })}` : ''}
         </Text>
       </View>
       <View style={{ flexDirection: wide ? 'row' : 'column', gap: space.xs, justifyContent: 'flex-end' }}>
@@ -203,7 +207,7 @@ function EditDojoDialog({ dojo, onClose, onSaved }: { dojo: PlatformDojo | null;
     try {
       onSaved(await platformApi.updateDojo(dojo!.id, {
         name: v!.name.trim(), short_name: v!.short_name?.trim() || null, plan: v!.plan, status: v!.status,
-        trial_ends_at: v!.status === 'trial' ? v!.trial_ends_at : null,
+        trial_ends_at: v!.status === 'trial' || v!.status === 'expired' ? v!.trial_ends_at : null,
       }));
     } catch (e) { setErr(errorMessage(e)); } finally { setBusy(false); }
   }
@@ -219,10 +223,11 @@ function EditDojoDialog({ dojo, onClose, onSaved }: { dojo: PlatformDojo | null;
       <Field label={pt('f_shortName')} value={v.short_name ?? ''} onChangeText={(x) => setV({ ...v, short_name: x })} maxLength={50} />
       <Select label={pt('f_plan')} value={v.plan} onChange={(x) => x && setV({ ...v, plan: x })} options={PLANS.map((p) => ({ value: p, label: pt(`plan_${p}`) }))} />
       <Select label={pt('f_status')} value={v.status} onChange={(x) => x && setV({ ...v, status: x })}
-        options={(['trial', 'active', 'suspended', 'cancelled'] as const).map((s) => ({ value: s, label: pt(`status_${s}`) }))} />
-      {v.status === 'trial' ? (
+        options={(['trial', 'active', 'expired', 'suspended', 'cancelled'] as const).map((s) => ({ value: s, label: pt(`status_${s}`) }))} />
+      {v.status === 'trial' || v.status === 'expired' ? (
         <DateField label={pt('f_trialEnds')} value={v.trial_ends_at} onChange={(x) => setV({ ...v, trial_ends_at: x })} />
       ) : null}
+      {v.status === 'expired' ? <Text variant="small" color={palette.ink2}>{pt('expiredHint')}</Text> : null}
       {v.status === 'suspended' && dojo.status !== 'suspended' ? <Notice tone="warning">{pt('suspendWarn')}</Notice> : null}
       {v.status === 'cancelled' && dojo.status !== 'cancelled' ? <Notice tone="warning">{pt('cancelWarn')}</Notice> : null}
       {err ? <Notice tone="danger">{err}</Notice> : null}
@@ -270,6 +275,200 @@ function DojosTab() {
         onCreated={(text) => { setCreating(false); setMsg({ tone: 'success', text }); data.reload(); }} />
       <EditDojoDialog dojo={editing} onClose={() => setEditing(null)}
         onSaved={(d) => { setEditing(null); setMsg({ tone: 'success', text: pt('saved') }); data.setData(list.map((x) => (x.id === d.id ? d : x))); }} />
+    </View>
+  );
+}
+
+
+// ===========================================================================
+// Solicitudes de registro
+// ===========================================================================
+function SignupSettingsCard({ s, onSaved }: { s: SignupSettings; onSaved: (s: SignupSettings) => void }) {
+  const wide = useIsWide();
+  const [enabled, setEnabled] = useState(s.signup_enabled);
+  const [days, setDays] = useState(String(s.trial_days));
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<Msg>(null);
+  useEffect(() => { setEnabled(s.signup_enabled); setDays(String(s.trial_days)); }, [s]);
+  const dirty = enabled !== s.signup_enabled || Number(days) !== s.trial_days;
+  const formUrl = RNPlatform.OS === 'web' && typeof window !== 'undefined' ? `${window.location.origin}/signup` : '/signup';
+
+  async function save() {
+    const n = Number(days);
+    if (!Number.isInteger(n) || n < 1 || n > 365) { setMsg({ tone: 'danger', text: pt('required') }); return; }
+    setBusy(true); setMsg(null);
+    try { onSaved(await signupApi.saveSettings({ signup_enabled: enabled, trial_days: n })); setMsg({ tone: 'success', text: pt('saved') }); }
+    catch (e) { setMsg({ tone: 'danger', text: errorMessage(e) }); } finally { setBusy(false); }
+  }
+
+  return (
+    <Card style={{ gap: space.md }}>
+      <Text variant="bodyStrong">{pt('sg_settings')}</Text>
+      <SwitchRow label={pt('sg_enabled')} hint={pt('sg_enabledHint', { url: formUrl })} value={enabled} onChange={setEnabled} />
+      <View style={{ flexDirection: wide ? 'row' : 'column', gap: space.md, alignItems: wide ? 'flex-end' : 'stretch' }}>
+        <View style={{ width: wide ? 220 : '100%' }}>
+          <Field label={pt('sg_trialDays')} value={days} keyboardType="number-pad" onChangeText={(x) => setDays(x.replace(/\D/g, '').slice(0, 3))} />
+        </View>
+        <Button label={pt('save')} variant="dark" icon="check" loading={busy} disabled={!dirty} onPress={save} fullWidth={!wide} />
+      </View>
+      {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
+    </Card>
+  );
+}
+
+const SG_TONE: Record<SignupStatus, Tone> = { pending: 'info', approved: 'success', rejected: 'neutral' };
+
+function SignupCard({ s, onApprove, onReject }: { s: Signup; onApprove: () => void; onReject: () => void }) {
+  const wide = useIsWide();
+  const name = [s.first_name, s.last_name].filter(Boolean).join(' ');
+  const where = [s.city, s.country_code !== 'XX' ? s.country_code : null].filter(Boolean).join(', ');
+  return (
+    <Card style={{ gap: space.sm }}>
+      <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' }}>
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <Text variant="bodyStrong">{s.dojo_name}</Text>
+          <Text variant="small" color={palette.ink2}>{dojoHost(s.dojo_slug || s.slug)}</Text>
+        </View>
+        <Badge label={pt(`sg_status_${s.status}`)} tone={SG_TONE[s.status]} />
+      </View>
+      <View style={{ gap: 2 }}>
+        <Text variant="small">{`${name} · ${s.email}${s.phone ? ` · ${s.phone}` : ''}`}</Text>
+        <Text variant="small" color={palette.ink2}>
+          {[where, s.timezone.replace(/_/g, ' '), s.disciplines, s.students_estimate != null ? pt('sg_students', { count: s.students_estimate }) : null]
+            .filter(Boolean).join(' · ')}
+        </Text>
+        <Text variant="small" color={palette.ink2}>{pt('sg_received', { when: dateTimeShort(s.created_at) })}</Text>
+        {s.reviewed_at ? (
+          <Text variant="small" color={palette.ink2}>
+            {pt('sg_reviewed', { status: pt(`sg_status_${s.status}`), when: dateTimeShort(s.reviewed_at), by: s.reviewed_by_name || '—' })}
+            {s.review_note ? ` · ${s.review_note}` : ''}
+          </Text>
+        ) : null}
+      </View>
+      {s.message ? (
+        <View style={{ backgroundColor: palette.sunken, borderRadius: radius.md, padding: space.sm }}>
+          <Text variant="small">{s.message}</Text>
+        </View>
+      ) : null}
+      {s.status === 'pending' && s.email_has_account ? <Text variant="small" color={palette.ink2}>{pt('sg_hasAccount')}</Text> : null}
+      {s.status === 'pending' && s.slug_status && !s.slug_status.available ? (
+        <Notice tone="warning">{pt('sg_slugUnavailable', { slug: s.slug })}</Notice>
+      ) : null}
+      {s.status === 'pending' ? (
+        <View style={{ flexDirection: wide ? 'row' : 'column', gap: space.xs, justifyContent: 'flex-end' }}>
+          <Button label={pt('sg_reject')} variant="secondary" size="sm" icon="x" onPress={onReject} fullWidth={!wide} />
+          <Button label={pt('sg_approve')} variant="dark" size="sm" icon="check" onPress={onApprove} fullWidth={!wide} />
+        </View>
+      ) : null}
+    </Card>
+  );
+}
+
+function ApproveDialog({ s, trialDays, dojos, onClose, onDone }: {
+  s: Signup | null; trialDays: number; dojos: PlatformDojo[]; onClose: () => void; onDone: (msg: string) => void;
+}) {
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [days, setDays] = useState('');
+  const [copyFrom, setCopyFrom] = useState<number>(0);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (s) { setName(s.dojo_name); setSlug(s.slug); setDays(String(trialDays)); setCopyFrom(0); setNote(''); setErr(null); }
+  }, [s, trialDays]);
+  if (!s) return null;
+
+  async function approve() {
+    const n = Number(days);
+    if (!name.trim() || !slug || !Number.isInteger(n) || n < 1) { setErr(pt('required')); return; }
+    setBusy(true); setErr(null);
+    try {
+      const r = await signupApi.approve(s!.id, {
+        name: name.trim(), slug, trial_days: n, copy_from_dojo_id: copyFrom || null, note: note.trim() || undefined,
+      });
+      const ends = r.dojo.trial_ends_at ? dayLong(String(r.dojo.trial_ends_at).slice(0, 10)) : '';
+      onDone([pt('sg_approved', { name: r.dojo.name, date: ends }),
+        r.email_sent ? pt('sg_approvedMail', { email: r.owner.email }) : pt('sg_approvedNoMail', { email: r.owner.email })].join(' '));
+    } catch (e) { setErr(errorMessage(e)); } finally { setBusy(false); }
+  }
+
+  return (
+    <Dialog visible title={pt('sg_approveTitle', { name: s.dojo_name })} onClose={onClose}
+      actions={<>
+        <Button label={t('common.cancel')} variant="ghost" onPress={onClose} />
+        <Button label={pt('sg_approve')} variant="dark" icon="check" loading={busy} onPress={approve} />
+      </>}>
+      <Text variant="small" color={palette.ink2}>{pt('sg_approveBody', { email: s.email })}</Text>
+      <Field label={`${pt('f_name')} *`} value={name} onChangeText={setName} />
+      <Field label={`${pt('f_slug')} *`} value={slug} autoCapitalize="none" autoCorrect={false}
+        onChangeText={(x) => setSlug(slugify(x))} hint={slug ? pt('f_slugHint', { url: dojoHost(slug) }) : undefined} />
+      <Field label={pt('sg_trialDays')} value={days} keyboardType="number-pad" onChangeText={(x) => setDays(x.replace(/\D/g, '').slice(0, 3))} />
+      <Select label={pt('f_copyFrom')} value={copyFrom} onChange={(x) => setCopyFrom(Number(x) || 0)}
+        options={[{ value: 0, label: pt('copyNone') }, ...dojos.map((d) => ({ value: d.id, label: d.name }))]} />
+      <Text variant="small" color={palette.ink2}>{pt('f_copyFromHint')}</Text>
+      <Field label={pt('sg_note')} value={note} onChangeText={setNote} maxLength={500} />
+      {err ? <Notice tone="danger">{err}</Notice> : null}
+    </Dialog>
+  );
+}
+
+function RejectDialog({ s, onClose, onDone }: { s: Signup | null; onClose: () => void; onDone: (msg: string) => void }) {
+  const [reason, setReason] = useState('');
+  const [notify, setNotify] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { if (s) { setReason(''); setNotify(true); setErr(null); } }, [s]);
+  if (!s) return null;
+
+  async function reject() {
+    setBusy(true); setErr(null);
+    try { await signupApi.reject(s!.id, { reason: reason.trim() || undefined, notify }); onDone(pt('sg_rejected')); }
+    catch (e) { setErr(errorMessage(e)); } finally { setBusy(false); }
+  }
+
+  return (
+    <Dialog visible title={pt('sg_rejectTitle', { name: s.dojo_name })} onClose={onClose}
+      actions={<>
+        <Button label={t('common.cancel')} variant="ghost" onPress={onClose} />
+        <Button label={pt('sg_reject')} variant="dark" icon="x" loading={busy} onPress={reject} />
+      </>}>
+      <Field label={pt('sg_reason')} value={reason} onChangeText={setReason} maxLength={500} hint={pt('sg_reasonHint')} />
+      <SwitchRow label={pt('sg_notify')} value={notify} onChange={setNotify} />
+      {err ? <Notice tone="danger">{err}</Notice> : null}
+    </Dialog>
+  );
+}
+
+function SignupsTab({ onPendingChange }: { onPendingChange: (n: number) => void }) {
+  const [filter, setFilter] = useState<SignupStatus | 'all'>('pending');
+  const data = useApi(() => signupApi.list(filter), [filter]);
+  const dojos = useApi(() => platformApi.dojos(), []);
+  const [approving, setApproving] = useState<Signup | null>(null);
+  const [rejecting, setRejecting] = useState<Signup | null>(null);
+  const [msg, setMsg] = useState<Msg>(null);
+  const d = data.data;
+  useEffect(() => { if (d) onPendingChange(d.pending); }, [d?.pending]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (data.loading && !d) return <Loading />;
+  if (data.error && !d) return <Notice tone="danger">{data.error}</Notice>;
+  if (!d) return null;
+  const done = (text: string) => { setApproving(null); setRejecting(null); setMsg({ tone: 'success', text }); data.reload(); dojos.reload(); };
+
+  return (
+    <View style={{ gap: space.md }}>
+      <SignupSettingsCard s={d.settings} onSaved={(settings) => data.setData({ ...d, settings })} />
+      <FilterChips label={pt('tab_signups')} value={filter} onChange={(k) => { setMsg(null); setFilter(k); }}
+        options={(['pending', 'approved', 'rejected', 'all'] as const).map((k) => ({ key: k, label: pt(`sg_filter_${k}`) }))} />
+      {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
+      {d.signups.length === 0 ? (
+        <EmptyState icon="inbox" title={pt('sg_empty')} body={filter === 'pending' ? pt('sg_emptyPending') : undefined} />
+      ) : null}
+      {d.signups.map((s) => (
+        <SignupCard key={s.id} s={s} onApprove={() => { setMsg(null); setApproving(s); }} onReject={() => { setMsg(null); setRejecting(s); }} />
+      ))}
+      <ApproveDialog s={approving} trialDays={d.settings.trial_days} dojos={dojos.data ?? []} onClose={() => setApproving(null)} onDone={done} />
+      <RejectDialog s={rejecting} onClose={() => setRejecting(null)} onDone={done} />
     </View>
   );
 }
@@ -528,8 +727,13 @@ function BackupsTab() {
 export function PlatformScreen() {
   useLanguage();
   const params = useLocalSearchParams<{ tab?: string }>();
-  const [tab, setTab] = useState<TabKey>(params.tab === 'backups' ? 'backups' : 'dojos');
-  const tabs = useMemo(() => (['dojos', 'backups'] as const).map((k) => ({ key: k, label: pt(`tab_${k}`) })), []);
+  const initial: TabKey = params.tab === 'backups' || params.tab === 'signups' ? params.tab : 'dojos';
+  const [tab, setTab] = useState<TabKey>(initial);
+  const [pending, setPending] = useState(0);
+  useEffect(() => { signupApi.list('pending').then((r) => setPending(r.pending)).catch(() => {}); }, []);
+  const tabs = useMemo(() => (['dojos', 'signups', 'backups'] as const).map((k) => ({
+    key: k, label: pt(`tab_${k}`), badge: k === 'signups' && pending ? pending : undefined,
+  })), [pending]);
   return (
     <Screen maxWidth={1000}>
       <View style={{ gap: 4 }}>
@@ -537,7 +741,9 @@ export function PlatformScreen() {
         <Text variant="small" color={palette.ink2}>{pt('subtitle')}</Text>
       </View>
       <Tabs value={tab} onChange={setTab} tabs={tabs} />
-      <View key={tab}>{tab === 'dojos' ? <DojosTab /> : <BackupsTab />}</View>
+      <View key={tab}>
+        {tab === 'dojos' ? <DojosTab /> : tab === 'signups' ? <SignupsTab onPendingChange={setPending} /> : <BackupsTab />}
+      </View>
     </Screen>
   );
 }

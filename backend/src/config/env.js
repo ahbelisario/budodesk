@@ -25,6 +25,7 @@ const schema = z.object({
   TRUST_PROXY: z.coerce.number().int().min(0).default(1),
 
   APP_BASE_URL: z.string().default('http://localhost:8081'),
+  SUPPORT_EMAIL: z.string().optional().default(''), // contacto en los avisos de fin de prueba (vacío = correo del superadmin)
 
   // Correo. Sin SMTP_HOST los correos solo se imprimen en consola (desarrollo).
   SMTP_HOST: z.string().optional(),

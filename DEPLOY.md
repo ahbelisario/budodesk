@@ -204,6 +204,39 @@ dinero llega directo a su cuenta.
 - Empieza en **Prueba** y pasa a **Real** cuando todo funcione. Para probar en
   Real, haz un pago chico y reembólsalo desde el panel del proveedor.
 
+## Registro de dojos nuevos (prueba gratis)
+
+Cualquier dojo puede pedir su cuenta en `https://budodesk.com/signup` (también
+aparece como «¿Tienes un dojo?» en la pantalla de entrada cuando no hay un dojo
+en la dirección).
+
+1. La solicitud queda **pendiente**. A quien se registra le llega «recibimos tu
+   solicitud» y al superadmin un aviso con el enlace al panel.
+2. En **Plataforma → Solicitudes** la apruebas (puedes corregir nombre y
+   dirección, elegir los días de prueba y copiar la configuración de otro dojo)
+   o la rechazas, con aviso opcional.
+3. Al aprobarla se crea el dojo en prueba. Al dueño le llega el correo para
+   crear su contraseña en `https://<dirección>.budodesk.com`, o para entrar si
+   ya tenía cuenta.
+4. Una semana antes y el último día de la prueba, los dueños reciben un aviso.
+   Al terminar, el dojo queda en **solo lectura**: pueden entrar y consultar
+   todo, pero no hacer cambios. El cobro automático, los recordatorios y el
+   registro de alumnos se detienen.
+5. Cuando paguen, en **Plataforma → Dojos → Editar** cámbialo a **Activo** con
+   su plan. Para darles más tiempo, pon una fecha nueva de fin de prueba y se
+   reabre.
+
+En el mismo panel se apaga el formulario y se cambian los días de prueba (30
+por omisión).
+
+- **DNS y certificado:** cada dojo usa su subdominio, así que se necesitan un
+  registro comodín `*.budodesk.com` y un certificado que lo cubra. nginx ya
+  acepta cualquier nombre (`server_name _`).
+- **Correo de contacto:** los avisos de fin de prueba y el aviso de solo
+  lectura dicen a quién escribir para contratar. Ponlo en el `.env` con
+  `SUPPORT_EMAIL=contacto@budodesk.com`. Si falta, los correos usan el del
+  superadmin y la app dice «contacta a BudoDesk».
+
 ## Nunca
 
 - `docker compose down -v` en producción: borra el volumen con la base de datos.

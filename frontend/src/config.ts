@@ -20,3 +20,17 @@ export function detectDojoSlug(): string | null {
   }
   return process.env.EXPO_PUBLIC_DOJO_SLUG || null;
 }
+
+/**
+ * Dirección web de un dojo: en budodesk.com o seikoukan.budodesk.com → slug.budodesk.com.
+ * En local (localhost / IP) no hay subdominios: se muestra el dominio de producción.
+ */
+export function dojoHost(slug: string) {
+  let parent = 'budodesk.com';
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const labels = window.location.hostname.split('.');
+    const local = labels.length < 2 || /^\d+$/.test(labels[labels.length - 1]);
+    if (!local) parent = (labels.length >= 3 ? labels.slice(1) : labels).join('.');
+  }
+  return `${slug}.${parent}`;
+}

@@ -8,6 +8,7 @@ import { platformEn } from './platform';
 import { onlineEn } from './online';
 import { reportsEn } from './reports';
 import { pushEn } from './push';
+import { signupEn } from './signup';
 
 type Shape<T> = { [K in keyof T]: T[K] extends string ? string : Shape<T[K]> };
 
@@ -188,6 +189,7 @@ export const en: Shape<typeof es> = {
   online: onlineEn,
   reports: reportsEn,
   push: pushEn,
+  signup: signupEn,
   ranks: ranksEn,
   billing: billingEn,
   classes: classesEn,
@@ -204,6 +206,10 @@ export const en: Shape<typeof es> = {
     NOT_A_MEMBER: "You don't belong to that dojo.",
     RATE_LIMITED: 'Too many attempts. Please wait a few minutes.',
     TOKEN_INVALID: 'This link is invalid or has expired.',
+    DOJO_READ_ONLY: "This dojo's free trial ended: you can view, but not make changes until a plan is activated.",
+    SIGNUP_CLOSED: "We're not accepting new dojos right now.",
+    SIGNUP_PENDING: "We already have a pending request with that email. We'll write to you once we review it.",
+    SLUG_TAKEN: 'That address is already taken. Choose another one.',
     generic: 'Something went wrong. Please try again.',
   },
 };

@@ -4,7 +4,7 @@ import { api } from './client';
 import { API_URL } from '../config';
 
 export type DojoPlan = 'trial' | 'basic' | 'pro';
-export type DojoStatus = 'trial' | 'active' | 'suspended' | 'cancelled';
+export type DojoStatus = 'trial' | 'active' | 'expired' | 'suspended' | 'cancelled';
 
 export type PlatformDojo = {
   id: number; slug: string; name: string; short_name: string | null; logo_url: string | null; color_primary: string | null;

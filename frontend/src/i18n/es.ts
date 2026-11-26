@@ -7,6 +7,7 @@ import { platformEs } from './platform';
 import { onlineEs } from './online';
 import { reportsEs } from './reports';
 import { pushEs } from './push';
+import { signupEs } from './signup';
 export const es = {
   common: {
     loading: 'Cargando…',
@@ -184,6 +185,7 @@ export const es = {
   online: onlineEs,
   reports: reportsEs,
   push: pushEs,
+  signup: signupEs,
   ranks: ranksEs,
   billing: billingEs,
   classes: classesEs,
@@ -200,6 +202,10 @@ export const es = {
     NOT_A_MEMBER: 'No perteneces a ese dojo.',
     RATE_LIMITED: 'Demasiados intentos. Espera unos minutos.',
     TOKEN_INVALID: 'El enlace no es válido o ya expiró.',
+    DOJO_READ_ONLY: 'La prueba gratis de este dojo terminó: puedes consultar, pero no hacer cambios hasta activar un plan.',
+    SIGNUP_CLOSED: 'Por ahora no estamos recibiendo registros de dojos nuevos.',
+    SIGNUP_PENDING: 'Ya tenemos una solicitud pendiente con ese correo. Te escribiremos en cuanto la revisemos.',
+    SLUG_TAKEN: 'Esa dirección ya está en uso. Elige otra.',
     generic: 'Algo salió mal. Inténtalo de nuevo.',
   },
 };

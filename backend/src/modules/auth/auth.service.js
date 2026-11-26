@@ -21,11 +21,12 @@ async function listUserDojos(executor, userId) {
   const [rows] = await executor.query(
     `SELECT d.id, d.slug, d.name, d.short_name, d.logo_url,
             d.color_primary, d.color_secondary, d.color_accent,
+            d.status, DATE_FORMAT(d.trial_ends_at, '%Y-%m-%d') AS trial_ends_at, d.timezone,
             GROUP_CONCAT(r.role ORDER BY r.role) AS roles
        FROM dojo_members m
        JOIN dojos d             ON d.id = m.dojo_id
        JOIN dojo_member_roles r ON r.dojo_id = m.dojo_id AND r.user_id = m.user_id
-      WHERE m.user_id = :uid AND m.status = 'active' AND d.status IN ('trial','active')
+      WHERE m.user_id = :uid AND m.status = 'active' AND d.status IN ('trial','active','expired')
       GROUP BY d.id
       ORDER BY d.name`,
     { uid: userId });
@@ -36,7 +37,8 @@ async function listUserDojos(executor, userId) {
 async function supportDojo(executor, dojoId) {
   if (!dojoId) return null;
   const d = await one(executor,
-    `SELECT id, slug, name, short_name, logo_url, color_primary, color_secondary, color_accent, status
+    `SELECT id, slug, name, short_name, logo_url, color_primary, color_secondary, color_accent, status,
+            DATE_FORMAT(trial_ends_at, '%Y-%m-%d') AS trial_ends_at, timezone
        FROM dojos WHERE id = :id`, { id: dojoId });
   return d ? { ...d, roles: expandRoles(['owner']), support: true } : null;
 }
@@ -49,7 +51,7 @@ async function superadminDojo(executor, dojoSlug) {
   const d = await one(executor,
     `SELECT id FROM dojos
       WHERE (:slug IS NULL OR slug = :slug)
-      ORDER BY status IN ('trial','active') DESC, id LIMIT 1`, { slug: dojoSlug || null });
+      ORDER BY status IN ('trial','active','expired') DESC, id LIMIT 1`, { slug: dojoSlug || null });
   return d ? supportDojo(executor, d.id) : null;
 }
 

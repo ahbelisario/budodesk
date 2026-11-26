@@ -14,6 +14,7 @@ import { navFor, type NavItem } from './nav';
 import { t } from '../i18n';
 import { fullName } from '../utils/format';
 import { API_URL } from '../config';
+import { TrialBanner } from './TrialBanner';
 
 export const TAB_BAR_HEIGHT = 64;
 
@@ -172,6 +173,7 @@ function SupportBanner() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { width } = useWindowDimensions();
+  const { dojo } = useSession();
   const wide = width >= WIDE_BREAKPOINT;
   if (wide) {
     return (
@@ -179,6 +181,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Sidebar />
         <View style={{ flex: 1 }}>
           <SupportBanner />
+          <TrialBanner />
           {children}
         </View>
       </View>
@@ -187,6 +190,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <View style={{ flex: 1, backgroundColor: palette.paper }}>
       <SupportBanner />
+      <TrialBanner topInset={!dojo?.support} />
       <View style={{ flex: 1 }}>{children}</View>
       <TabBar />
     </View>

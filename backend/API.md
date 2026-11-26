@@ -246,3 +246,24 @@ Base: `/api/v2`. Todas las respuestas: `{ status: 'success', data, meta? }` o
 | GET | `/api/v2/announcements` |  |
 | POST | `/api/v2/announcements` | staff* |
 | DELETE | `/api/v2/announcements/:id` | admin, staff |
+
+### /api/v2/signup (público, sin sesión)
+
+| Método | Ruta | Roles |
+|---|---|---|
+| GET | `/api/v2/signup/config` |  |
+| GET | `/api/v2/signup/slug?slug=` |  |
+| POST | `/api/v2/signup` |  |
+
+### /api/v2/platform/signups (superadmin)
+
+| Método | Ruta | Roles |
+|---|---|---|
+| GET | `/api/v2/platform/signups?status=pending\|approved\|rejected\|all` | superadmin |
+| PUT | `/api/v2/platform/signups/settings` | superadmin |
+| POST | `/api/v2/platform/signups/:id/approve` | superadmin |
+| POST | `/api/v2/platform/signups/:id/reject` | superadmin |
+
+**Dojo con la prueba vencida** (`dojos.status = 'expired'`): se puede entrar y consultar,
+pero cualquier POST/PUT/PATCH/DELETE responde `403 DOJO_READ_ONLY`, salvo `/auth`,
+`/me`, `/notifications`, `/account` y `/platform`. El superadmin no tiene esa restricción.

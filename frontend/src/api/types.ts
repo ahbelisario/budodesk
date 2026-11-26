@@ -15,7 +15,10 @@ export type DojoSummary = {
   roles: Role[];
   /** Superadmin dentro de un dojo del que no es miembro */
   support?: boolean;
-  status?: string;
+  /** expired = terminó la prueba gratis: solo lectura */
+  status?: 'trial' | 'active' | 'expired' | 'suspended' | 'cancelled';
+  trial_ends_at?: string | null;
+  timezone?: string;
 };
 
 export type User = {

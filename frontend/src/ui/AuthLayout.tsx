@@ -62,7 +62,11 @@ export function DojoBrand({ dojo, size = 56, dark }: { dojo: PublicDojo | null; 
   );
 }
 
-export function AuthLayout({ dojo, children }: { dojo?: PublicDojo | null; children: React.ReactNode }) {
+export function AuthLayout({ dojo, children, headline, tagline, maxWidth = 420 }: {
+  dojo?: PublicDojo | null; children: React.ReactNode;
+  /** Texto grande del panel oscuro (pantallas anchas); por defecto, el de la app del alumno */
+  headline?: string; tagline?: string; maxWidth?: number;
+}) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const wide = width >= WIDE_BREAKPOINT;
@@ -70,7 +74,7 @@ export function AuthLayout({ dojo, children }: { dojo?: PublicDojo | null; child
   const form = (
     <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: space.lg, paddingTop: space.lg + insets.top, paddingBottom: space.xl + insets.bottom }}
       keyboardShouldPersistTaps="handled" style={{ backgroundColor: palette.paper }}>
-      <View style={{ width: '100%', maxWidth: 420, alignSelf: 'center', gap: space.lg }}>
+      <View style={{ width: '100%', maxWidth, alignSelf: 'center', gap: space.lg }}>
         {!wide ? (
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.md }}>
             <DojoBrand dojo={dojo ?? null} size={44} />
@@ -93,10 +97,10 @@ export function AuthLayout({ dojo, children }: { dojo?: PublicDojo | null; child
             </View>
             <View style={{ gap: space.md }}>
               <Text style={{ fontFamily: fonts.display, fontSize: 40, lineHeight: 48 }} color="#FFFFFF">
-                {getLanguage() === 'en' ? 'Train. Progress.\nBelong.' : 'Entrena. Avanza.\nPertenece.'}
+                {headline ?? (getLanguage() === 'en' ? 'Train. Progress.\nBelong.' : 'Entrena. Avanza.\nPertenece.')}
               </Text>
               <Text color={palette.mutedOnDark}>
-                {getLanguage() === 'en' ? 'Your classes, ranks and payments in one place.' : 'Tus clases, grados y pagos en un solo lugar.'}
+                {tagline ?? (getLanguage() === 'en' ? 'Your classes, ranks and payments in one place.' : 'Tus clases, grados y pagos en un solo lugar.')}
               </Text>
             </View>
             <Text variant="caption" color={palette.mutedOnDark}>BudoDesk</Text>

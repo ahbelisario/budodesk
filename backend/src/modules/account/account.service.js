@@ -205,6 +205,6 @@ async function changePassword({ userId, sessionId, current, next }) {
 }
 
 module.exports = {
-  sendAccessEmail, register, requestJoin, verifyEmail, resendVerification,
+  issueToken, sendAccessEmail, register, requestJoin, verifyEmail, resendVerification,
   forgotPassword, resetPassword, changePassword, recordConsent,
 };

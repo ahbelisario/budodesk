@@ -61,6 +61,13 @@ export default function Login() {
           </Link>
         </View>
         <Button label={t('auth.signIn')} onPress={submit} loading={busy} disabled={!identifier.trim() || !password} fullWidth />
+        {/* En budodesk.com (sin dojo en la dirección): invitación a registrar un dojo */}
+        {!slug ? (
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <Text variant="small" color={palette.ink2}>{t('signup.ownDojo')}</Text>
+            <Link href="/signup"><Text variant="smallStrong" style={{ textDecorationLine: 'underline' }}>{t('signup.ownDojoLink')}</Text></Link>
+          </View>
+        ) : null}
       </AuthLayout>
     </ThemeProvider>
   );

@@ -67,15 +67,17 @@ account.post('/password/reset', limiter, validate({
 account.get('/dojos/:slug', validate({ params: z.object({ slug: z.string().max(60) }) }), async (req, res) => {
   const d = await one(pool,
     `SELECT id, slug, name, short_name, logo_url, color_primary, color_secondary, color_accent, language,
-            self_registration, privacy_version, phone, email, website, city, state, facebook_url, instagram_url, tiktok_url
-       FROM dojos WHERE slug = :slug AND status IN ('trial','active')`, { slug: req.valid.params.slug });
+            self_registration, privacy_version, phone, email, website, city, state, facebook_url, instagram_url, tiktok_url,
+            status = 'expired' AS read_only
+       FROM dojos WHERE slug = :slug AND status IN ('trial','active','expired')`, { slug: req.valid.params.slug });
   if (!d) return res.status(404).json({ status: 'error', code: 'NOT_FOUND', message: 'Dojo no encontrado' });
-  ok(res, d);
+  // En solo lectura no se aceptan registros nuevos
+  ok(res, { ...d, read_only: !!d.read_only, self_registration: d.read_only ? 'closed' : d.self_registration });
 });
 
 account.get('/dojos/:slug/privacy', validate({ params: z.object({ slug: z.string().max(60) }) }), async (req, res) => {
   const d = await one(pool,
-    `SELECT name, privacy_policy, privacy_version, terms_conditions FROM dojos WHERE slug = :slug AND status IN ('trial','active')`,
+    `SELECT name, privacy_policy, privacy_version, terms_conditions FROM dojos WHERE slug = :slug AND status IN ('trial','active','expired')`,
     { slug: req.valid.params.slug });
   if (!d) return res.status(404).json({ status: 'error', code: 'NOT_FOUND', message: 'Dojo no encontrado' });
   ok(res, d);

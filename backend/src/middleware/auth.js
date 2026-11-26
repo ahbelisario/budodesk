@@ -9,6 +9,15 @@ const { unauthorized, forbidden, AppError } = require('../utils/errors');
  */
 const IMPLIED = { owner: ['admin'] };
 
+/**
+ * Dojo en solo lectura (prueba vencida): se bloquea todo lo que no sea consultar, salvo la
+ * propia cuenta (perfil, contraseña, avisos, salir/cambiar de dojo).
+ */
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const READ_ONLY_ALLOWED = ['/api/v2/auth', '/api/v2/me', '/api/v2/notifications', '/api/v2/account', '/api/v2/platform'];
+/** /api/v2/me sí, /api/v2/members no */
+const allowedInReadOnly = (url) => READ_ONLY_ALLOWED.some((p) => url === p || url.startsWith(`${p}/`) || url.startsWith(`${p}?`));
+
 function expandRoles(roles) {
   const set = new Set(roles);
   for (const r of roles) (IMPLIED[r] || []).forEach((x) => set.add(x));
@@ -54,17 +63,19 @@ async function authenticate(req, _res, next) {
 
   let roles = [];
   let support = false;
+  let readOnly = false; // terminó la prueba: se puede ver todo, pero no cambiar nada
   if (claims.dojoId) {
     const [rows] = await pool.query(
-      `SELECT r.role
+      `SELECT r.role, d.status AS dojo_status
          FROM dojo_member_roles r
          JOIN dojo_members m ON m.dojo_id = r.dojo_id AND m.user_id = r.user_id
          JOIN dojos d        ON d.id = r.dojo_id
         WHERE r.dojo_id = :dojoId AND r.user_id = :uid
-          AND m.status = 'active' AND d.status IN ('trial','active')`,
+          AND m.status = 'active' AND d.status IN ('trial','active','expired')`,
       { dojoId: claims.dojoId, uid: claims.userId });
     if (rows.length > 0) {
       roles = expandRoles(rows.map((r) => r.role));
+      readOnly = rows[0].dojo_status === 'expired' && !session.is_superadmin;
     } else if (session.is_superadmin && await one(pool, 'SELECT id FROM dojos WHERE id = :id', { id: claims.dojoId })) {
       // Modo soporte: el superadmin entra a un dojo donde no es miembro (o que está suspendido)
       roles = expandRoles(['owner']);
@@ -81,7 +92,13 @@ async function authenticate(req, _res, next) {
     roles,
     isSuperadmin: !!session.is_superadmin,
     support,
+    readOnly,
   };
+
+  if (readOnly && !SAFE_METHODS.has(req.method) && !allowedInReadOnly(req.originalUrl)) {
+    return next(new AppError(403, 'DOJO_READ_ONLY',
+      'La prueba gratis de este dojo terminó: puedes consultar la información, pero no hacer cambios hasta activar un plan.'));
+  }
 
   // "Última actividad", como máximo una escritura cada 5 min por usuario
   pool.query(
