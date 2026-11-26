@@ -47,8 +47,8 @@ while [ $# -gt 0 ]; do
     -y|--yes) YES=1 ;;
     --engine) shift; ENGINE="${1-}" ;;
     --engine=*) ENGINE="${1#*=}" ;;
-    -h|--help) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    config|up|admin|demo|status|logs|stop|restore)
+    -h|--help) sed -n '3,/^# ====/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
+    config|up|admin|demo|status|logs|stop|restore|migrations)
       [ -z "$CMD" ] || die "Solo un comando a la vez"; CMD="$1"
       if { [ "$1" = logs ] || [ "$1" = restore ]; } && [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then LOG_SVC="$2"; shift; fi ;;
     *) die "Opción desconocida: $1  (usa --help)" ;;
