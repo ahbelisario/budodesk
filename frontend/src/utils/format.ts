@@ -20,6 +20,10 @@ export function dayLong(s: string) {
 export function dayShort(s: string) {
   return new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short' }).format(parseDay(s));
 }
+/** "14 nov 2021": para fechas que pueden ser de otros años (grados, historial) */
+export function dayYear(s: string) {
+  return new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short', year: 'numeric' }).format(parseDay(s.slice(0, 10)));
+}
 export function weekdayShort(s: string) {
   return new Intl.DateTimeFormat(locale(), { weekday: 'short' }).format(parseDay(s)).replace('.', '');
 }

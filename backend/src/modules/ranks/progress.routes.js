@@ -10,7 +10,7 @@ const { auditReq } = require('../../utils/audit');
 const { actingUser } = require('../../utils/acting');
 const { getDojo } = require('../../utils/dojo');
 const { todayIn } = require('../../utils/dates');
-const { memberProgress, applyRankChange } = require('./progress.service');
+const { memberProgress, applyRankChange, recomputeRankDates } = require('./progress.service');
 
 const router = express.Router();
 router.use(authenticate, requireDojo);
@@ -85,6 +85,94 @@ router.post('/promotions', requireRole('admin', 'instructor'), validate({
     req.app.emit('rank_changed', { dojoId: req.auth.dojoId, userId: b.user_id, rank: result.rank, eventType: result.event_type });
   }
   res.status(201).json({ status: 'success', data: result });
+});
+
+// ---------------------------------------------------------------------------
+// Corrección del historial (dueño/admin): fechas, certificados, grados anteriores
+// ---------------------------------------------------------------------------
+async function notFuture(req, d) {
+  const dojo = await getDojo(req);
+  if (d > todayIn(dojo.timezone)) throw badRequest('La fecha no puede ser futura');
+}
+
+// PATCH /progress/history/:id — corregir fecha, certificado o notas de un registro
+router.patch('/history/:id', requireRole('admin'), validate({
+  params: z.object({ id }),
+  body: z.object({
+    awarded_date: date.optional(),
+    certificate_number: z.string().trim().max(50).nullish(),
+    notes: z.string().trim().max(2000).nullish(),
+  }).refine((o) => Object.keys(o).length > 0, 'Nada que actualizar'),
+}), async (req, res) => {
+  const b = req.valid.body;
+  if (b.awarded_date) await notFuture(req, b.awarded_date);
+  const out = await req.tdb.transaction(async (t) => {
+    const h = await t.one('SELECT * FROM rank_history WHERE dojo_id = :dojoId AND id = :id FOR UPDATE', { id: req.valid.params.id });
+    if (!h) throw notFound('Registro no encontrado');
+    const sets = [];
+    if (b.awarded_date !== undefined) sets.push('awarded_date = :awarded_date');
+    if (b.certificate_number !== undefined) sets.push('certificate_number = :certificate_number');
+    if (b.notes !== undefined) sets.push('notes = :notes');
+    try {
+      await t.query(`UPDATE rank_history SET ${sets.join(', ')} WHERE dojo_id = :dojoId AND id = :id`,
+        { id: h.id, awarded_date: b.awarded_date, certificate_number: b.certificate_number || null, notes: b.notes || null });
+    } catch (e) {
+      if (e.code === 'ER_DUP_ENTRY') throw badRequest('Ese número de certificado ya está en otro registro');
+      throw e;
+    }
+    await recomputeRankDates(t, h.user_id, h.discipline_id);
+    await auditReq(req, t.executor, {
+      action: 'correct', entity: 'rank_history', entityId: h.id,
+      before: { awarded_date: h.awarded_date, certificate_number: h.certificate_number, notes: h.notes }, after: b,
+    });
+    return h.user_id;
+  });
+  res.json({ status: 'success', data: { disciplines: await memberProgress(req.tdb, out), history: await history(req.tdb, out) } });
+});
+
+// POST /progress/history — agregar un grado anterior al historial sin cambiar el grado actual
+router.post('/history', requireRole('admin'), validate({
+  body: z.object({
+    user_id: id, rank_id: id, awarded_date: date,
+    stripes: z.coerce.number().int().min(0).max(10).default(0),
+    certificate_number: z.string().trim().max(50).nullish(),
+    notes: z.string().trim().max(2000).nullish(),
+  }),
+}), async (req, res) => {
+  const b = req.valid.body;
+  await notFuture(req, b.awarded_date);
+  await req.tdb.transaction(async (t) => {
+    const member = await t.one('SELECT 1 AS ok FROM dojo_members WHERE dojo_id = :dojoId AND user_id = :u', { u: b.user_id });
+    if (!member) throw notFound('Miembro no encontrado');
+    const rank = await t.one('SELECT id, discipline_id FROM ranks WHERE dojo_id = :dojoId AND id = :r', { r: b.rank_id });
+    if (!rank) throw badRequest('Grado no válido');
+    try {
+      const r = await t.query(
+        `INSERT INTO rank_history (dojo_id, user_id, discipline_id, rank_id, stripes, event_type, awarded_date, certificate_number, awarded_by, notes)
+         VALUES (:dojoId, :u, :d, :r, :stripes, 'promotion', :date, :cert, :by, :notes)`,
+        { u: b.user_id, d: rank.discipline_id, r: rank.id, stripes: b.stripes, date: b.awarded_date,
+          cert: b.certificate_number || null, by: req.auth.userId, notes: b.notes || null });
+      await auditReq(req, t.executor, { action: 'add_past', entity: 'rank_history', entityId: r.insertId, after: b });
+    } catch (e) {
+      if (e.code === 'ER_DUP_ENTRY') throw badRequest('Ese número de certificado ya está en otro registro');
+      throw e;
+    }
+    await recomputeRankDates(t, b.user_id, rank.discipline_id);
+  });
+  res.status(201).json({ status: 'success', data: { disciplines: await memberProgress(req.tdb, b.user_id), history: await history(req.tdb, b.user_id) } });
+});
+
+// DELETE /progress/history/:id — borrar un registro equivocado (el grado actual no cambia)
+router.delete('/history/:id', requireRole('admin'), validate({ params: z.object({ id }) }), async (req, res) => {
+  const uid = await req.tdb.transaction(async (t) => {
+    const h = await t.one('SELECT * FROM rank_history WHERE dojo_id = :dojoId AND id = :id FOR UPDATE', { id: req.valid.params.id });
+    if (!h) throw notFound('Registro no encontrado');
+    await t.query('DELETE FROM rank_history WHERE dojo_id = :dojoId AND id = :id', { id: h.id });
+    await recomputeRankDates(t, h.user_id, h.discipline_id);
+    await auditReq(req, t.executor, { action: 'delete', entity: 'rank_history', entityId: h.id, before: h });
+    return h.user_id;
+  });
+  res.json({ status: 'success', data: { disciplines: await memberProgress(req.tdb, uid), history: await history(req.tdb, uid) } });
 });
 
 // PUT /progress/members/:userId/requirements/:requirementId — evaluar un requisito del temario

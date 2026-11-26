@@ -11,7 +11,7 @@ import { palette, space, fonts } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useIsWide } from '../../navigation/AppShell';
 import { t, useLanguage } from '../../i18n';
-import { dayLong, dayShort, hm, money } from '../../utils/format';
+import { dayLong, dayShort, hm, money, dayYear } from '../../utils/format';
 import { ViewAs } from '../StudentHome';
 import { CandidateBadge, rt } from './bits';
 
@@ -48,7 +48,7 @@ function DisciplineCard({ d }: { d: DisciplineProgress }) {
         <Text variant="overline" color="rgba(255,255,255,0.7)">{d.discipline}{d.track && d.track !== 'General' ? ` · ${d.track}` : ''}</Text>
         <Text style={{ fontFamily: fonts.display, fontSize: 34, lineHeight: 40 }} color="#FFFFFF">{d.current.name}</Text>
         {d.display_style === 'belt' ? <Belt size="lg" color={d.current.color} stripeColor={d.current.stripe_color} stripes={d.current.stripes} onDark /> : null}
-        <Text variant="small" color="rgba(255,255,255,0.7)">{t('members.since')} {dayShort(d.current.since_date)}{d.current.stripes ? ` · ${t('members.stripes')}: ${d.current.stripes}` : ''}</Text>
+        <Text variant="small" color="rgba(255,255,255,0.7)">{t('members.since')} {dayYear(d.current.since_date)}{d.current.stripes ? ` · ${t('members.stripes')}: ${d.current.stripes}` : ''}</Text>
         {d.next && p ? (
           <>
             <Text variant="body" color="#FFFFFF" style={{ marginTop: space.xs }}>{t('members.nextRank', { rank: d.next.name })}</Text>
@@ -151,7 +151,7 @@ export function MyProgress() {
             <View key={h.id}>
               {i > 0 ? <Divider /> : null}
               <View style={{ flexDirection: 'row', gap: space.md, paddingVertical: space.xs, alignItems: 'center' }}>
-                <Text variant="small" color={palette.ink2} style={{ width: 64 }}>{dayShort(h.awarded_date)}</Text>
+                <Text variant="small" color={palette.ink2} style={{ width: 92 }}>{dayYear(h.awarded_date)}</Text>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text variant="bodyStrong" numberOfLines={1}>{h.rank_name}{h.event_type === 'stripe' ? ` · ${t('members.stripes')} ${h.stripes}` : ''}</Text>
                   <Text variant="caption" color={palette.ink2} numberOfLines={1}>{[h.discipline, t(`members.ev_${h.event_type}`), h.score != null ? `${Number(h.score)}` : null].filter(Boolean).join(' · ')}</Text>

@@ -15,7 +15,7 @@ import { DojoMark, useIsWide } from '../navigation/AppShell';
 import { palette, radius, space, fonts } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 import { t } from '../i18n';
-import { dayLong, dayShort, hm, money, parseDay, weekdayShort } from '../utils/format';
+import { dayLong, dayShort, hm, money, parseDay, weekdayShort, dayYear } from '../utils/format';
 import { errorMessage } from '../utils/errors';
 import { PushNudge } from '../push/PushNudge';
 
@@ -81,7 +81,7 @@ function RankCard({ r }: { r: RankProgress }) {
         <View style={{ flex: 1, gap: 4 }}>
           <Text variant="overline" color={palette.mutedOnDark}>{r.discipline}{r.track !== 'General' ? ` · ${r.track}` : ''}</Text>
           <Text style={{ fontFamily: fonts.display, fontSize: 32, lineHeight: 38 }} color="#FFFFFF">{r.current.name}</Text>
-          <Text variant="small" color="#D6D2C7">{[t('home.rankSince', { date: dayShort(r.current.since_date) }), stripes].filter(Boolean).join(' · ')}</Text>
+          <Text variant="small" color="#D6D2C7">{[t('home.rankSince', { date: dayYear(r.current.since_date) }), stripes].filter(Boolean).join(' · ')}</Text>
         </View>
         {!belt ? <View style={{ paddingTop: 8 }}><Belt color={r.current.color} stripeColor={r.current.stripe_color} stripes={r.current.stripes} onDark /></View> : null}
       </View>

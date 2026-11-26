@@ -139,6 +139,12 @@ export const membersApi = {
   progress: (id: number) => api.get<{ disciplines: DisciplineProgress[]; history: RankEvent[] }>(`/progress/members/${id}`),
   promote: (body: { user_id: number; rank_id: number; stripes?: number; event_type?: string; awarded_date?: string; notes?: string | null; score?: number | null }) => api.post('/progress/promotions', body),
   evaluate: (userId: number, reqId: number, status: Requirement['status']) => api.put(`/progress/members/${userId}/requirements/${reqId}`, { status }),
+  /** Corrección del historial de grados (dueño/admin). Devuelven el progreso actualizado. */
+  editRankEvent: (id: number, b: { awarded_date?: string; certificate_number?: string | null; notes?: string | null }) =>
+    api.patch<{ disciplines: DisciplineProgress[]; history: RankEvent[] }>(`/progress/history/${id}`, b),
+  addPastRank: (b: { user_id: number; rank_id: number; awarded_date: string; stripes?: number; certificate_number?: string | null; notes?: string | null }) =>
+    api.post<{ disciplines: DisciplineProgress[]; history: RankEvent[] }>('/progress/history', b),
+  deleteRankEvent: (id: number) => api.del<{ disciplines: DisciplineProgress[]; history: RankEvent[] }>(`/progress/history/${id}`),
   setExamDate: (userId: number, disciplineId: number, date: string | null) => api.patch(`/progress/members/${userId}/disciplines/${disciplineId}`, { next_exam_date: date }),
 
   memberships: (id: number) => api.get<Membership[]>('/memberships/mine', { user_id: id }),

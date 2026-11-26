@@ -87,4 +87,34 @@ async function applyRankChange(t, { userId, disciplineId, rankId, stripes = 0, e
     { userId, disc: disciplineId, rank: rankId, stripes, date: awardedDate, nextExam: nextExamDate ?? null });
 }
 
-module.exports = { memberProgress, applyRankChange };
+/**
+ * Recalcula las fechas del grado actual a partir del historial (tras editar, agregar o
+ * borrar registros): «desde» = el primer registro del grado actual después del último
+ * registro de otro grado (los tips no cuentan); «practica desde» = el registro más antiguo
+ * si es anterior. Si el historial no tiene el grado actual, las fechas no se tocan.
+ */
+async function recomputeRankDates(t, userId, disciplineId) {
+  const cur = await t.one(
+    'SELECT rank_id, since_date, started_discipline_at FROM member_ranks WHERE dojo_id = :dojoId AND user_id = :u AND discipline_id = :d FOR UPDATE',
+    { u: userId, d: disciplineId });
+  if (!cur) return null;
+  const [row] = await t.query(
+    `SELECT
+       (SELECT MIN(h.awarded_date) FROM rank_history h
+         WHERE h.dojo_id = :dojoId AND h.user_id = :u AND h.discipline_id = :d AND h.rank_id = :r AND h.event_type <> 'stripe'
+           AND h.awarded_date >= COALESCE((SELECT MAX(o.awarded_date) FROM rank_history o
+                                            WHERE o.dojo_id = :dojoId AND o.user_id = :u AND o.discipline_id = :d AND o.rank_id <> :r), '1000-01-01')
+       ) AS since,
+       (SELECT MIN(h.awarded_date) FROM rank_history h WHERE h.dojo_id = :dojoId AND h.user_id = :u AND h.discipline_id = :d) AS earliest`,
+    { u: userId, d: disciplineId, r: cur.rank_id });
+  await t.query(
+    `UPDATE member_ranks
+        SET since_date = COALESCE(:since, since_date),
+            started_discipline_at = CASE WHEN :earliest IS NOT NULL AND (started_discipline_at IS NULL OR started_discipline_at > :earliest)
+                                         THEN :earliest ELSE started_discipline_at END
+      WHERE dojo_id = :dojoId AND user_id = :u AND discipline_id = :d`,
+    { u: userId, d: disciplineId, since: row.since, earliest: row.earliest });
+  return row;
+}
+
+module.exports = { memberProgress, applyRankChange, recomputeRankDates };

@@ -4,13 +4,13 @@ import { Pressable, View } from 'react-native';
 import { membersApi, type DisciplineDef, type DisciplineProgress, type RankEvent, type Requirement } from '../../api/members';
 import { useApi } from '../../utils/useApi';
 import { errorMessage } from '../../utils/errors';
-import { Badge, Belt, Button, Card, Divider, EmptyState, Field, Loading, Notice, ProgressBar, SectionHeader, Text } from '../../ui/primitives';
+import { Badge, Belt, Button, Card, Divider, EmptyState, Field, Icon, Loading, Notice, ProgressBar, SectionHeader, Text } from '../../ui/primitives';
 import { Dialog } from '../../ui/Dialog';
 import { DateField, Select } from '../../ui/forms';
 import { palette, radius, space, fonts } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useIsWide } from '../../navigation/AppShell';
-import { dayShort } from '../../utils/format';
+import { dayShort, dayYear } from '../../utils/format';
 import { mt } from './bits';
 import { t } from '../../i18n';
 import { rankOptions } from './MemberNew';
@@ -89,7 +89,7 @@ function DisciplineCard({ d, userId, canEdit, onPromote, onChanged }: {
           <Text variant="overline" color={palette.ink2}>{d.discipline}{d.track && d.track !== 'General' ? ` · ${d.track}` : ''}</Text>
           <Text style={{ fontFamily: fonts.display, fontSize: 28, lineHeight: 34 }}>{d.current.name}</Text>
           <Text variant="small" color={palette.ink2}>
-            {[mt('since') + ' ' + dayShort(d.current.since_date), d.current.stripes ? `${mt('stripes')}: ${d.current.stripes}` : null].filter(Boolean).join(' · ')}
+            {[mt('since') + ' ' + dayYear(d.current.since_date), d.current.stripes ? `${mt('stripes')}: ${d.current.stripes}` : null].filter(Boolean).join(' · ')}
           </Text>
         </View>
         {canEdit ? (
@@ -130,23 +130,33 @@ function DisciplineCard({ d, userId, canEdit, onPromote, onChanged }: {
   );
 }
 
-function History({ items }: { items: RankEvent[] }) {
-  if (!items.length) return null;
+function History({ items, canFix, onEdit, onAdd }: {
+  items: RankEvent[]; canFix: boolean; onEdit: (h: RankEvent) => void; onAdd: () => void;
+}) {
+  if (!items.length && !canFix) return null;
   return (
     <Card>
-      <SectionHeader title={mt('history')} />
+      <SectionHeader title={mt('history')}
+        action={canFix ? <Button label={mt('hAdd')} size="sm" variant="secondary" icon="plus" onPress={onAdd} /> : undefined} />
       {items.map((h, i) => (
         <View key={h.id}>
           {i > 0 ? <Divider /> : null}
           <View style={{ flexDirection: 'row', gap: space.md, paddingVertical: space.xs, alignItems: 'center' }}>
-            <Text variant="small" color={palette.ink2} style={{ width: 64 }}>{dayShort(h.awarded_date)}</Text>
+            <Text variant="small" color={palette.ink2} style={{ width: 92 }}>{dayYear(h.awarded_date)}</Text>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text variant="bodyStrong" numberOfLines={1}>{h.rank_name}{h.event_type === 'stripe' ? ` · ${mt('stripes')} ${h.stripes}` : ''}</Text>
               <Text variant="caption" color={palette.ink2} numberOfLines={1}>
-                {[h.discipline, mt(`ev_${h.event_type}`), h.awarded_by_name ? mt('awardedBy', { name: h.awarded_by_name }) : null].filter(Boolean).join(' · ')}
+                {[h.discipline, mt(`ev_${h.event_type}`), h.certificate_number ? `#${h.certificate_number}` : null,
+                  h.awarded_by_name ? mt('awardedBy', { name: h.awarded_by_name }) : null].filter(Boolean).join(' · ')}
               </Text>
               {h.notes ? <Text variant="caption" color={palette.ink2}>{h.notes}</Text> : null}
             </View>
+            {canFix ? (
+              <Pressable accessibilityRole="button" accessibilityLabel={`${mt('hEdit')} ${h.rank_name}`} hitSlop={8} onPress={() => onEdit(h)}
+                style={{ padding: 6 }}>
+                <Icon name="edit-2" size={16} color={palette.ink2} />
+              </Pressable>
+            ) : null}
           </View>
         </View>
       ))}
@@ -154,14 +164,91 @@ function History({ items }: { items: RankEvent[] }) {
   );
 }
 
+type FixState =
+  | { mode: 'edit'; h: RankEvent; date: string | null; cert: string; notes: string }
+  | { mode: 'add'; discipline_id: number; rank_id: number | null; date: string | null; cert: string; notes: string };
+
+/** Corregir un registro del historial o agregar un grado anterior (dueño/admin) */
+function FixDialog({ state, setState, userId, structure, disciplines, onDone }: {
+  state: FixState | null; setState: (s: FixState | null) => void; userId: number;
+  structure: DisciplineDef[]; disciplines: DisciplineProgress[]; onDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [confirmDel, setConfirmDel] = useState(false);
+  React.useEffect(() => { setErr(null); setConfirmDel(false); }, [state?.mode, state?.mode === 'edit' ? state.h.id : null]);
+  if (!state) return null;
+  const close = () => setState(null);
+
+  async function save() {
+    if (!state!.date || (state!.mode === 'add' && !state!.rank_id)) { setErr(t('errors.generic')); return; }
+    setBusy(true); setErr(null);
+    try {
+      if (state!.mode === 'edit') {
+        await membersApi.editRankEvent(state!.h.id, { awarded_date: state!.date, certificate_number: state!.cert.trim() || null, notes: state!.notes.trim() || null });
+      } else {
+        await membersApi.addPastRank({ user_id: userId, rank_id: state!.rank_id!, awarded_date: state!.date,
+          certificate_number: state!.cert.trim() || null, notes: state!.notes.trim() || null });
+      }
+      close(); onDone();
+    } catch (e) { setErr(errorMessage(e)); } finally { setBusy(false); }
+  }
+  async function del() {
+    if (state!.mode !== 'edit') return;
+    if (!confirmDel) { setConfirmDel(true); return; }
+    setBusy(true); setErr(null);
+    try { await membersApi.deleteRankEvent(state!.h.id); close(); onDone(); } catch (e) { setErr(errorMessage(e)); } finally { setBusy(false); }
+  }
+
+  const discOptions = [...disciplines.map((d) => ({ value: d.discipline_id, label: d.discipline })),
+    ...structure.filter((s) => !disciplines.some((d) => d.discipline_id === s.id)).map((s) => ({ value: s.id, label: s.name }))];
+  const dd = state.mode === 'add' ? structure.find((s) => s.id === state.discipline_id) : undefined;
+  const title = state.mode === 'edit' ? mt('hEditTitle', { rank: state.h.rank_name })
+    : mt('hAddTitle', { discipline: dd?.name ?? '' });
+
+  return (
+    <Dialog visible title={title} onClose={close}
+      actions={<>
+        {state.mode === 'edit' ? (
+          <Button label={confirmDel ? mt('hDeleteConfirm') : mt('hDelete')} variant={confirmDel ? 'danger' : 'ghost'} icon="trash-2"
+            loading={busy && confirmDel} onPress={del} />
+        ) : null}
+        <Button label={t('common.cancel')} variant="ghost" onPress={close} />
+        <Button label={t('common.save')} icon="check" loading={busy && !confirmDel} onPress={save} />
+      </>}>
+      <View style={{ gap: space.md }}>
+        <Text variant="small" color={palette.ink2}>{state.mode === 'edit' ? mt('hEditHint') : mt('hAddHint')}</Text>
+        {state.mode === 'add' ? (
+          <>
+            {discOptions.length > 1 ? (
+              <Select label={mt('hDiscipline')} value={state.discipline_id}
+                onChange={(v) => v && setState({ ...state, discipline_id: v, rank_id: null })} options={discOptions} />
+            ) : null}
+            <Select label={mt('rank')} value={state.rank_id} onChange={(v) => setState({ ...state, rank_id: v })} options={rankOptions(dd)} />
+          </>
+        ) : null}
+        <DateField label={mt('awardDate')} value={state.date} onChange={(v) => setState({ ...state, date: v })} />
+        <Field label={mt('hCert')} value={state.cert} onChangeText={(v) => setState({ ...state, cert: v })} maxLength={50} />
+        <Field label={mt('promotionNotes')} value={state.notes} onChangeText={(v) => setState({ ...state, notes: v })} />
+        {err ? <Notice tone="danger">{err}</Notice> : null}
+      </View>
+    </Dialog>
+  );
+}
+
 type PromoteState = { discipline_id: number; discipline: string; kind: 'promotion' | 'stripe' | 'initial'; rank_id: number | null; stripes: number; max: number; date: string | null; notes: string };
 
-export function RanksTab({ userId, canEdit, structure, onChanged }: { userId: number; canEdit: boolean; structure: DisciplineDef[]; onChanged: () => void }) {
+export function RanksTab({ userId, canEdit, canFix = false, structure, onChanged }: {
+  userId: number; canEdit: boolean; structure: DisciplineDef[]; onChanged: () => void;
+  /** Dueño/admin: corregir el historial (fechas, grados anteriores) */
+  canFix?: boolean;
+}) {
   const data = useApi(() => membersApi.progress(userId), [userId]);
   const [dlg, setDlg] = useState<PromoteState | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const [fix, setFix] = useState<FixState | null>(null);
   const wide = useIsWide();
 
   if (data.loading) return <Loading />;
@@ -216,7 +303,15 @@ export function RanksTab({ userId, canEdit, structure, onChanged }: { userId: nu
           ))}
         </View>
       ) : null}
-      <History items={data.data?.history ?? []} />
+      <History items={data.data?.history ?? []} canFix={canFix}
+        onEdit={(h) => { setOk(null); setFix({ mode: 'edit', h, date: h.awarded_date.slice(0, 10), cert: h.certificate_number ?? '', notes: h.notes ?? '' }); }}
+        onAdd={() => {
+          setOk(null);
+          const first = disciplines[0]?.discipline_id ?? structure[0]?.id;
+          if (first) setFix({ mode: 'add', discipline_id: first, rank_id: null, date: null, cert: '', notes: '' });
+        }} />
+      <FixDialog state={fix} setState={setFix} userId={userId} structure={structure} disciplines={disciplines}
+        onDone={() => { setOk(mt('hSaved')); data.reload(); onChanged(); }} />
 
       <Dialog visible={!!dlg} onClose={() => setDlg(null)}
         title={dlg ? (dlg.kind === 'stripe' ? mt('stripeTitle', { discipline: dlg.discipline }) : dlg.kind === 'initial' ? `${mt('initialRankTitle')} · ${dlg.discipline}` : mt('promoteTitle', { discipline: dlg.discipline })) : ''}

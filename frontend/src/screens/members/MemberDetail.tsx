@@ -18,7 +18,7 @@ import { DateField, FormGrid, Select, SwitchRow, Tabs } from '../../ui/forms';
 import { palette, space, fonts } from '../../theme/tokens';
 import { useIsWide } from '../../navigation/AppShell';
 import { t, useLanguage } from '../../i18n';
-import { dateTimeShort, dayShort, fullName, money } from '../../utils/format';
+import { dateTimeShort, dayShort, fullName, money, dayYear } from '../../utils/format';
 import { PersonForm, PhotoPicker, type PersonValue } from './PersonForm';
 import { PersonPicker, type PickedPerson } from './PersonPicker';
 import { RankChip, StatusBadge, mt } from './bits';
@@ -67,7 +67,7 @@ function SummaryTab({ m, financial, go }: { m: Member; financial: boolean; go: (
             <Text variant="overline" color={palette.ink2}>{r.discipline}</Text>
             <Text style={{ fontFamily: fonts.display, fontSize: 22, lineHeight: 28 }}>{r.rank}</Text>
             {r.display_style === 'belt' ? <RankChip r={{ ...r, rank: '' }} /> : null}
-            <Text variant="caption" color={palette.ink2}>{mt('since')} {dayShort(r.since_date)}{r.next_exam_date ? ` · ${mt('nextExam')} ${dayShort(r.next_exam_date)}` : ''}</Text>
+            <Text variant="caption" color={palette.ink2}>{mt('since')} {dayYear(r.since_date)}{r.next_exam_date ? ` · ${mt('nextExam')} ${dayShort(r.next_exam_date)}` : ''}</Text>
           </View>
         ))}
       </Card>
@@ -430,7 +430,7 @@ export function MemberDetail() {
 
       <View key={`${tab}-${version}`}>
         {tab === 'summary' ? <SummaryTab m={m} financial={isStaff} go={setTab} /> : null}
-        {tab === 'ranks' ? <RanksTab userId={m.id} canEdit={canRank && m.status === 'active'} structure={(structure.data ?? []) as DisciplineDef[]} onChanged={() => member.reload()} /> : null}
+        {tab === 'ranks' ? <RanksTab userId={m.id} canEdit={canRank && m.status === 'active'} canFix={isAdmin} structure={(structure.data ?? []) as DisciplineDef[]} onChanged={() => member.reload()} /> : null}
         {tab === 'billing' && isStaff ? <BillingTab userId={m.id} name={name} onChanged={() => member.reload()} /> : null}
         {tab === 'attendance' ? <AttendanceTab userId={m.id} /> : null}
         {tab === 'data' ? <DataTab m={m} canEdit={isStaff} isAdmin={isAdmin} onSaved={(u) => member.setData(u)} /> : null}
