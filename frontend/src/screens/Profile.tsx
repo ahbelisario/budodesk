@@ -20,6 +20,7 @@ import { dateTimeShort, fullName } from '../utils/format';
 import { PersonForm, PhotoPicker, type PersonValue } from './members/PersonForm';
 import { mt } from './members/bits';
 import { DevicePushCard } from '../push/DevicePushCard';
+import { AppVersion } from '../ui/AppVersion';
 
 type TabKey = 'data' | 'children' | 'account';
 type Msg = { tone: 'success' | 'danger'; text: string } | null;
@@ -235,6 +236,7 @@ function AccountTab() {
       <View style={{ gap: space.xs }}>
         <Text variant="caption" color={palette.ink2}>{user?.email}</Text>
         <Button label={t('auth.signOut')} variant="danger" icon="log-out" onPress={logout} style={{ alignSelf: 'flex-start' }} />
+        <AppVersion />
       </View>
 
       <Dialog visible={confirmAll} onClose={() => setConfirmAll(false)} title={mt('logoutAllTitle')}

@@ -17,6 +17,7 @@ export const es = {
     back: 'Regresar',
     close: 'Cerrar',
     add: 'Agregar',
+    serverVersion: 'servidor %{version}',
     or: 'o',
     comingSoon: 'Esta sección se está migrando al nuevo diseño.',
     language: 'Idioma',

@@ -90,9 +90,29 @@ git pull
 ./deploy.sh up
 ```
 
+`./deploy.sh up` muestra qué versión despliega y `./deploy.sh status` cuál está en el código.
+En la app, Perfil → Cuenta muestra «BudoDesk X.Y.Z»; si el servidor tiene otra versión, lo dice
+(por ejemplo, si el navegador guardó una versión vieja de la página).
+
 Los datos no se tocan: el esquema solo se carga cuando el volumen está vacío.
 Las tablas nuevas de la plataforma (respaldos) el backend las crea solo al arrancar si faltan.
 Cambios futuros de esquema llegarán como archivos de migración.
+
+## Versiones
+
+La versión vive en el archivo `VERSION` (formato `MAYOR.MENOR.PARCHE`) y se repite en
+`backend/package.json`, `frontend/package.json` y `frontend/app.json`. No se editan a mano:
+
+```bash
+./release.sh patch     # 1.0.8 → 1.0.9  correcciones
+./release.sh minor     # 1.0.9 → 1.1.0  funciones nuevas
+./release.sh major     # 1.1.0 → 2.0.0
+git push origin main --follow-tags
+```
+
+`release.sh` actualiza los números, agrega al `CHANGELOG.md` los commits desde la versión
+anterior, hace el commit «Versión X.Y.Z» y la etiqueta `vX.Y.Z`. Para volver a una versión:
+`git checkout v1.0.8` (y `git checkout main` para regresar).
 
 ## Respaldos
 

@@ -26,7 +26,8 @@ function createApp() {
     setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
   }));
 
-  app.get('/api/v2/health', (_req, res) => res.json({ status: 'success', data: { ok: true } }));
+  const { version } = require('../package.json');
+  app.get('/api/v2/health', (_req, res) => res.json({ status: 'success', data: { ok: true, version } }));
 
   const { account, me } = require('./modules/account/account.routes');
   const { plans, discounts } = require('./modules/plans/plans.routes');

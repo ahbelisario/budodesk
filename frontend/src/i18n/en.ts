@@ -21,6 +21,7 @@ export const en: Shape<typeof es> = {
     back: 'Back',
     close: 'Close',
     add: 'Add',
+    serverVersion: 'server %{version}',
     or: 'or',
     comingSoon: 'This section is being moved to the new design.',
     language: 'Language',

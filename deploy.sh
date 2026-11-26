@@ -458,8 +458,10 @@ load_demo() {
   ok "Datos de ejemplo cargados (las cuentas demo usan la contraseña Demo-BudoDesk-1)"
 }
 
+app_version() { if [ -f VERSION ]; then tr -d ' \n' < VERSION; else echo "(sin versión)"; fi; }
+
 deploy() {
-  step "Despliegue ($APP_ENV con $CONTAINER_ENGINE, proyecto $COMPOSE_PROJECT_NAME)"
+  step "Despliegue de BudoDesk $(app_version) ($APP_ENV con $CONTAINER_ENGINE, proyecto $COMPOSE_PROJECT_NAME)"
   mkdir -p backups
   local fresh=0
   volume_exists || fresh=1
@@ -603,7 +605,7 @@ case "$CMD" in
   up)     load_env; pick_engine; deploy ;;
   admin)  load_env; pick_engine; create_admin ;;
   demo)   load_env; pick_engine; load_demo ;;
-  status) load_env; pick_engine; compose ps; if http_ok; then ok "API responde en el puerto $HTTP_PORT"; else warn "El API no responde en el puerto $HTTP_PORT"; fi ;;
+  status) load_env; pick_engine; say "Código: BudoDesk $(app_version) ($(git describe --tags --always 2>/dev/null || echo 'sin git'))"; compose ps; if http_ok; then ok "API responde en el puerto $HTTP_PORT"; else warn "El API no responde en el puerto $HTTP_PORT"; fi ;;
   logs)   load_env; pick_engine; compose logs -f --tail 100 ${LOG_SVC:+"$LOG_SVC"} ;;
   restore) load_env; pick_engine; restore "$LOG_SVC" ;;
   stop)   load_env; pick_engine; compose down; ok "Contenedores apagados. Los datos siguen en los volúmenes." ;;

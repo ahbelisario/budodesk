@@ -2,7 +2,7 @@
   "expo": {
     "name": "BudoDesk",
     "slug": "budodesk",
-    "version": "0.9.0",
+    "version": "1.0.8",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "budodesk",
