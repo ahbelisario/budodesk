@@ -464,7 +464,15 @@ deploy() {
   local fresh=0
   volume_exists || fresh=1
   [ "$fresh" = 1 ] && say "Primera vez en este servidor: se creará la base de datos con el esquema inicial."
-  compose up -d --build
+  if [ "$CONTAINER_ENGINE" = podman ]; then
+    # podman-compose reconstruye las imágenes pero no reemplaza los contenedores que ya existen:
+    # se construye, se bajan (sin -v: la base y los archivos se conservan) y se vuelven a crear.
+    compose build
+    compose down
+    compose up -d
+  else
+    compose up -d --build
+  fi
   wait_healthy
   compose ps
 
