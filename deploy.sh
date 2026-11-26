@@ -348,7 +348,7 @@ configure() {
     warn "El puerto $HTTP_PORT ya está ocupado por otro programa."
     ask_yn "¿Usarlo de todos modos?" n || { ask HTTP_PORT "Otro puerto" "" v_port; }
   fi
-  cur=$(env_get DEFAULT_DOJO_SLUG);    ask DEFAULT_DOJO_SLUG "Dojo por omisión (cuando el subdominio no lo indica)" "${cur:-seikoukan}" v_slug
+  cur=$(env_get DEFAULT_DOJO_SLUG);    ask DEFAULT_DOJO_SLUG "Dojo por omisión (solo al entrar por IP o localhost)" "${cur:-seikoukan}" v_slug
 
   local proxies
   cur=$(env_get TRUST_PROXY); [ -n "$cur" ] && [ "$cur" -ge 1 ] 2>/dev/null && proxies=$((cur - 1)) || proxies=1

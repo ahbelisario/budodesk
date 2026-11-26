@@ -9,14 +9,20 @@ const RESERVED_SUBDOMAINS = new Set(['www', 'app', 'api', 'localhost', 'qa', 'te
  * Dojo de la pantalla de inicio de sesión:
  *  1. subdominio en web (seikoukan.budodesk.com → "seikoukan")
  *  2. ?dojo= en la URL (enlaces de correo)
- *  3. EXPO_PUBLIC_DOJO_SLUG (desarrollo / app nativa de un dojo)
+ *  3. EXPO_PUBLIC_DOJO_SLUG, solo en local (localhost / IP) o en la app nativa:
+ *     en budodesk.com o www.budodesk.com no hay dojo (entrada general)
  */
 export function detectDojoSlug(): string | null {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const fromQuery = new URLSearchParams(window.location.search).get('dojo');
     if (fromQuery) return fromQuery;
-    const parts = window.location.hostname.split('.');
-    if (parts.length >= 3 && !RESERVED_SUBDOMAINS.has(parts[0]) && !/^\d+$/.test(parts[0])) return parts[0];
+    const host = window.location.hostname;
+    const parts = host.split('.');
+    const local = host === 'localhost' || !host.includes('.') || /^\d+(\.\d+){3}$/.test(host);
+    if (!local && parts.length >= 3 && !RESERVED_SUBDOMAINS.has(parts[0])) return parts[0];
+    // En un dominio real sin dojo (budodesk.com, www.budodesk.com) no se adivina:
+    // es la entrada general de BudoDesk (registro de dojos, elegir dojo).
+    if (!local) return null;
   }
   return process.env.EXPO_PUBLIC_DOJO_SLUG || null;
 }
