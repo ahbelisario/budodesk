@@ -18,6 +18,7 @@ const { getDojo } = require('../../utils/dojo');
 const { todayIn } = require('../../utils/dates');
 const accountService = require('../account/account.service');
 
+const { assertStudents } = require('../../services/subscription');
 const router = express.Router();
 router.use(authenticate, requireDojo);
 
@@ -280,6 +281,9 @@ router.post('/', requireRole('admin', 'staff'), validate({ body: createSchema })
         { uid, lang: dojo.language, dojo: dojo.id });
     }
 
+    // Límite de alumnos activos del plan de BudoDesk
+    if (b.roles.includes('student') && (b.status ?? 'active') === 'active') await assertStudents(req.auth.dojoId, 1, conn);
+
     await t.query(
       `INSERT INTO dojo_members (dojo_id, user_id, member_number, status, joined_at, notes, source)
        VALUES (:dojoId, :uid, :num, :status, :joined, :notes, 'admin')`,
@@ -326,8 +330,13 @@ router.patch('/:userId', requireRole('admin', 'staff'), validate({ params: uidPa
   const b = req.valid.body;
 
   await req.tdb.transaction(async (t) => {
-    const before = await t.one('SELECT user_id FROM dojo_members WHERE dojo_id = :dojoId AND user_id = :userId FOR UPDATE', { userId });
+    const before = await t.one('SELECT user_id, status FROM dojo_members WHERE dojo_id = :dojoId AND user_id = :userId FOR UPDATE', { userId });
     if (!before) throw notFound('Miembro no encontrado');
+    // Reactivar a un alumno cuenta contra el límite del plan
+    if (b.status === 'active' && before.status !== 'active') {
+      const isStudent = await t.one("SELECT 1 AS ok FROM dojo_member_roles WHERE dojo_id = :dojoId AND user_id = :userId AND role = 'student'", { userId });
+      if (isStudent) await assertStudents(req.auth.dojoId, 1, t.executor);
+    }
 
     // ¿La persona pertenece también a otros dojos? Entonces su email y perfil
     // los administra ella misma: el admin de un dojo no puede cambiarlos.
@@ -381,6 +390,11 @@ router.put('/:userId/roles', requireRole('admin'), validate({
       const [{ n }] = await t.query(
         `SELECT COUNT(*) AS n FROM dojo_member_roles WHERE dojo_id = :dojoId AND role = 'owner' AND user_id <> :userId`, { userId });
       if (n === 0) throw conflict('El dojo debe tener al menos un owner', 'LAST_OWNER');
+    }
+
+    if (roles.includes('student') && !current.includes('student')) {
+      const m = await t.one('SELECT status FROM dojo_members WHERE dojo_id = :dojoId AND user_id = :userId', { userId });
+      if (m?.status === 'active') await assertStudents(req.auth.dojoId, 1, t.executor);
     }
 
     await t.query('DELETE FROM dojo_member_roles WHERE dojo_id = :dojoId AND user_id = :userId', { userId });

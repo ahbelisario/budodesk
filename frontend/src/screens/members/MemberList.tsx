@@ -11,6 +11,8 @@ import { useSession } from '../../session/SessionProvider';
 import { useApi } from '../../utils/useApi';
 import { errorMessage } from '../../utils/errors';
 import { Screen } from '../../ui/Screen';
+import { useSubscription } from '../../session/useSubscription';
+import { PlanNotice } from '../../ui/PlanNotice';
 import { Avatar, Badge, Button, Card, Divider, EmptyState, Loading, Notice, Text } from '../../ui/primitives';
 import { FilterChips, SearchField, Select } from '../../ui/forms';
 import { palette, space } from '../../theme/tokens';
@@ -118,6 +120,11 @@ export function MemberList() {
   useEffect(() => { load(1); }, [dq, status, role, disc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = !!(dq || role || disc || status !== 'active');
+  // Plan Básico: uso de alumnos activos y aviso al llegar al límite
+  const { sub, isBasic, contactEmail, reload: reloadSub } = useSubscription();
+  const limit = sub?.limits.students ?? null;
+  const used = sub?.usage.students ?? 0;
+  useEffect(() => { reloadSub(); }, [total]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Screen onRefresh={() => load(1)} refreshing={false}>
@@ -125,6 +132,9 @@ export function MemberList() {
         <View style={{ gap: 2 }}>
           <Text variant="title" accessibilityRole="header">{mt('title')}</Text>
           {!loading ? <Text variant="small" color={palette.ink2}>{mt('subtitle', { count: total })}</Text> : null}
+          {canCreate && isBasic && limit != null ? (
+            <Text variant="small" color={used >= limit ? palette.danger : palette.ink2}>{t('plan.studentsUsage', { current: used, limit })}</Text>
+          ) : null}
         </View>
         {canCreate ? <Button label={mt('newMember')} icon="user-plus" onPress={() => router.push('/members/new')} /> : null}
       </View>
@@ -165,6 +175,10 @@ export function MemberList() {
         ) : null}
       </View>
 
+      {canCreate && isBasic && limit != null && used >= limit ? (
+        <PlanNotice contactEmail={contactEmail}
+          text={used > limit ? t('plan.studentsOver', { current: used, limit }) : t('plan.studentsFull', { limit })} />
+      ) : null}
       {error ? <Notice tone="danger">{error}</Notice> : null}
 
       <Card padding={0} style={{ gap: 0, overflow: 'hidden' }}>

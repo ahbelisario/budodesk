@@ -9,6 +9,7 @@ import { onlineEn } from './online';
 import { reportsEn } from './reports';
 import { pushEn } from './push';
 import { signupEn } from './signup';
+import { planEn } from './plan';
 
 type Shape<T> = { [K in keyof T]: T[K] extends string ? string : Shape<T[K]> };
 
@@ -190,6 +191,7 @@ export const en: Shape<typeof es> = {
   reports: reportsEn,
   push: pushEn,
   signup: signupEn,
+  plan: planEn,
   ranks: ranksEn,
   billing: billingEn,
   classes: classesEn,

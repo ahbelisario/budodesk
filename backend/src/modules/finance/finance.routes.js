@@ -24,7 +24,7 @@ const { buildSet } = require('../../utils/sql');
 const svc = require('./finance.service');
 
 const router = express.Router();
-router.use(authenticate, requireDojo, requireRole('admin'));
+router.use(authenticate, requireDojo, requireRole('admin'), require('../../services/subscription').requireFeature('finance'));
 
 const id = z.coerce.number().int().positive();
 const kind = z.enum(['expense', 'income']);

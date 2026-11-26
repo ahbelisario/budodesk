@@ -1,4 +1,5 @@
 /** Ajustes del dojo (admin): general, apariencia, clases y alta, cobro, legal y actividad */
+import { useSubscription } from '../../session/useSubscription';
 import React, { useEffect, useState } from 'react';
 import { Image, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -191,6 +192,7 @@ function LookTab({ base, onSaved }: { base: DojoSettings; onSaved: (d: DojoSetti
 // ---------------------------------------------------------------------------
 function LocationsCard() {
   const data = useApi(() => dojoApi.locations(), []);
+  const { isBasic } = useSubscription();
   const [dlg, setDlg] = useState<{ open: boolean; loc: Location | null }>({ open: false, loc: null });
   const [name, setName] = useState(''); const [address, setAddress] = useState(''); const [active, setActive] = useState(true);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
@@ -207,7 +209,7 @@ function LocationsCard() {
   return (
     <Card style={{ gap: space.sm }}>
       <SectionHeader title={dt('locations')} action={<Button label={dt('newLocation')} size="sm" variant="secondary" icon="plus" onPress={() => open(null)} />} />
-      <Text variant="small" color={palette.ink2}>{dt('locationsHint')}</Text>
+      <Text variant="small" color={palette.ink2}>{dt('locationsHint')}{isBasic ? ` ${t('plan.locationsHint')}` : ''}</Text>
       {data.loading ? <Loading /> : (data.data ?? []).length === 0 ? <Text color={palette.ink2}>{dt('noLocations')}</Text> : (data.data ?? []).map((l, i) => (
         <View key={l.id}>
           {i > 0 ? <Divider /> : null}

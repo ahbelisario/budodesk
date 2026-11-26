@@ -43,7 +43,15 @@ export type AuditEntry = { id: number; action: string; entity: string; entity_id
   /** Acción de la plataforma (solo la ve el superadmin) */
   platform?: boolean };
 
+/** Plan de BudoDesk del dojo (lo que el dojo le paga a BudoDesk) */
+export type Subscription = {
+  plan: 'trial' | 'basic' | 'pro' | null; status: string | null; effective: 'basic' | 'pro';
+  limits: { students: number | null; locations: number | null; finance: boolean };
+  usage: { students: number; locations: number };
+};
+
 export const dojoApi = {
+  subscription: () => api.get<Subscription>('/dojo/subscription'),
   announcements: (includeExpired = false) => api.get<AnnouncementFull[]>('/announcements', includeExpired ? { include_expired: true } : undefined),
   createAnnouncement: (b: { title: string; body: string; audience: Audience; discipline_id?: number | null; pinned?: boolean; send_push?: boolean; send_email?: boolean; expires_at?: string | null }) =>
     api.post<{ id: number; recipients: number }>('/announcements', b),

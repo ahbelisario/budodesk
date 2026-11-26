@@ -8,6 +8,7 @@ import { onlineEs } from './online';
 import { reportsEs } from './reports';
 import { pushEs } from './push';
 import { signupEs } from './signup';
+import { planEs } from './plan';
 export const es = {
   common: {
     loading: 'Cargando…',
@@ -186,6 +187,7 @@ export const es = {
   reports: reportsEs,
   push: pushEs,
   signup: signupEs,
+  plan: planEs,
   ranks: ranksEs,
   billing: billingEs,
   classes: classesEs,

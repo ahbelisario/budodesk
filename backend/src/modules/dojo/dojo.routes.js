@@ -26,6 +26,8 @@ const optStr = (n) => z.string().trim().max(n).nullish();
 // ===========================================================================
 // Ajustes
 // ===========================================================================
+const subscription = require('../../services/subscription');
+const { assertLocations } = subscription;
 const dojo = express.Router();
 dojo.use(authenticate, requireDojo);
 
@@ -191,11 +193,17 @@ dojo.get('/payment-methods', async (req, res) => {
   res.json({ status: 'success', data: row ?? { paypal_enabled: 0, accepts_cash: 1, accepts_transfer: 1, transfer_instructions: null } });
 });
 
+// Plan de BudoDesk del dojo: límites y uso (para avisos en la app)
+dojo.get('/subscription', async (req, res) => {
+  res.json({ status: 'success', data: await subscription.summary(req.auth.dojoId) });
+});
+
 // Sedes
 dojo.get('/locations', async (req, res) => {
   res.json({ status: 'success', data: await req.tdb.query('SELECT id, name, address, active FROM dojo_locations WHERE dojo_id = :dojoId ORDER BY active DESC, name') });
 });
 dojo.post('/locations', requireRole('admin'), validate({ body: z.object({ name: z.string().trim().min(1).max(120), address: optStr(255) }) }), async (req, res) => {
+  await assertLocations(req.auth.dojoId);
   const r = await req.tdb.query('INSERT INTO dojo_locations (dojo_id, name, address) VALUES (:dojoId, :name, :address)',
     { name: req.valid.body.name, address: req.valid.body.address ?? null });
   res.status(201).json({ status: 'success', data: { id: r.insertId, ...req.valid.body, active: 1 } });
@@ -205,6 +213,10 @@ dojo.patch('/locations/:id', requireRole('admin'), validate({
   body: z.object({ name: z.string().trim().min(1).max(120).optional(), address: optStr(255), active: z.boolean().optional() })
     .refine((o) => Object.keys(o).length > 0, 'Nada que actualizar'),
 }), async (req, res) => {
+  if (req.valid.body.active === true) {
+    const loc = await req.tdb.one('SELECT active FROM dojo_locations WHERE dojo_id = :dojoId AND id = :id', { id: req.valid.params.id });
+    if (loc && !loc.active) await assertLocations(req.auth.dojoId);
+  }
   const set = buildSet(req.valid.body, { name: 'name', address: 'address', active: 'active' });
   const r = await req.tdb.query(`UPDATE dojo_locations SET ${set.sql} WHERE dojo_id = :dojoId AND id = :id`, { ...set.params, id: req.valid.params.id });
   if (r.affectedRows === 0) throw notFound('Sede no encontrada');

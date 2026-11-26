@@ -106,11 +106,15 @@ async function register(b, { ip }) {
   });
 
   await sendVerification(userId, dojo.id);
-  return { user_id: userId, membership_status: dojo.self_registration === 'open' ? 'active' : 'pending' };
+  const [[m]] = await pool.query('SELECT status FROM dojo_members WHERE dojo_id = :d AND user_id = :u', { d: dojo.id, u: userId });
+  return { user_id: userId, membership_status: m?.status ?? 'pending' };
 }
 
 async function joinDojo(conn, userId, dojo) {
-  const status = dojo.self_registration === 'open' ? 'active' : 'pending';
+  let status = dojo.self_registration === 'open' ? 'active' : 'pending';
+  // Si el dojo llegó al límite de alumnos de su plan, la solicitud queda pendiente
+  // (el admin la ve, pero para activarla necesita lugar o cambiar de plan)
+  if (status === 'active' && !(await require('../../services/subscription').canAddStudents(dojo.id, 1, conn))) status = 'pending';
   await conn.query(
     `INSERT INTO dojo_members (dojo_id, user_id, status, joined_at, source)
      VALUES (:d, :u, :s, CURDATE(), 'self_registration')`, { d: dojo.id, u: userId, s: status });

@@ -204,6 +204,23 @@ dinero llega directo a su cuenta.
 - Empieza en **Prueba** y pasa a **Real** cuando todo funcione. Para probar en
   Real, haz un pago chico y reembólsalo desde el panel del proveedor.
 
+## Planes de BudoDesk (Básico y Pro)
+
+El plan se cambia en **Plataforma → Dojos → Editar**.
+
+| | Básico | Pro | En prueba |
+|---|---|---|---|
+| Alumnos activos | hasta 50 | sin límite | como Pro |
+| Sedes activas | 1 | varias | como Pro |
+| Finanzas (gastos e ingresos, por cobrar) | no | sí | como Pro |
+
+- Al llegar al límite no se pueden dar de alta ni reactivar alumnos; quien se
+  registra solo queda **pendiente**. El dojo ve cuántos lleva y a quién escribir.
+- Si un dojo baja a Básico **conserva todo**: nada se borra ni se desactiva, solo
+  no puede agregar más mientras exceda el límite. Sus finanzas siguen guardadas
+  y se ven de nuevo al volver a Pro.
+- Los límites están en `backend/src/services/subscription.js`.
+
 ## Monitoreo y alertas
 
 En **Plataforma → Monitoreo** se configura a dónde llegan las alertas:

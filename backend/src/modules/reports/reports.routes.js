@@ -21,6 +21,8 @@ const router = express.Router();
 router.use(authenticate, requireDojo);
 const ADMIN = requireRole('admin');
 const STAFF = requireRole('admin', 'staff', 'instructor');
+// Finanzas: solo en el plan Pro (o en prueba)
+const FINANCE = require('../../services/subscription').requireFeature('finance');
 
 const ym = z.string().regex(/^\d{4}-\d{2}$/, 'Mes AAAA-MM');
 const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha AAAA-MM-DD');
@@ -54,7 +56,7 @@ function defaultMonths(q, today, back = 11) {
 // ---------------------------------------------------------------------------
 const TYPE_GROUP = { membership: 'membership', exam_fee: 'exams', signup_fee: 'signup' }; // el resto → other
 
-router.get('/finance', ADMIN, validate({ query: z.object({ from: ym.optional(), to: ym.optional() }) }), async (req, res) => {
+router.get('/finance', ADMIN, FINANCE, validate({ query: z.object({ from: ym.optional(), to: ym.optional() }) }), async (req, res) => {
   const tdb = req.tdb;
   const d = await dojoInfo(tdb);
   await finance.ensureCategories(tdb);
@@ -136,7 +138,7 @@ router.get('/finance', ADMIN, validate({ query: z.object({ from: ym.optional(), 
 // ---------------------------------------------------------------------------
 // Por cobrar
 // ---------------------------------------------------------------------------
-router.get('/receivables', ADMIN, async (req, res) => {
+router.get('/receivables', ADMIN, FINANCE, async (req, res) => {
   const d = await dojoInfo(req.tdb);
   const rows = await req.tdb.query(
     `SELECT c.user_id, ${NAME} AS name, COUNT(*) AS charges, MIN(c.due_date) AS oldest_due,
