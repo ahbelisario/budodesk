@@ -2,16 +2,22 @@
   "expo": {
     "name": "BudoDesk",
     "slug": "budodesk",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "budodesk",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "ios": { "supportsTablet": true, "bundleIdentifier": "com.budodesk.app" },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.budodesk.app"
+    },
     "android": {
       "package": "com.budodesk.app",
-      "adaptiveIcon": { "backgroundColor": "#1A1A1A", "foregroundImage": "./assets/images/icon.png" },
+      "adaptiveIcon": {
+        "backgroundColor": "#1A1A1A",
+        "foregroundImage": "./assets/images/icon.png"
+      },
       "edgeToEdgeEnabled": true
     },
     "web": {
@@ -24,14 +30,34 @@
     },
     "plugins": [
       "expo-router",
-      ["expo-splash-screen", { "image": "./assets/images/icon.png", "imageWidth": 160, "resizeMode": "contain", "backgroundColor": "#F6F4EF" }],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#F6F4EF"
+        }
+      ],
       "expo-secure-store",
       "expo-localization",
       "expo-font",
       "expo-web-browser",
-      ["expo-image-picker", { "photosPermission": "BudoDesk usa tus fotos para tu foto de perfil." }],
-      ["expo-notifications", { "color": "#1A1A1A" }]
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "BudoDesk usa tus fotos para tu foto de perfil."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1A1A1A"
+        }
+      ]
     ],
-    "experiments": { "typedRoutes": false }
+    "experiments": {
+      "typedRoutes": false
+    }
   }
 }

@@ -7,6 +7,10 @@ Formato: `MAYOR.MENOR.PARCHE`.
 
 Cada versión se crea con `./release.sh` y queda marcada en git como `vX.Y.Z`.
 
+## [1.0.9] - 2026-11-26
+
+- Migraciones de esquema versionadas
+
 ## [1.0.8] - 2026-11-26
 
 Primera versión numerada. Reúne todo lo de BudoDesk v2 hasta hoy:
