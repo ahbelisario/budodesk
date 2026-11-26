@@ -9,7 +9,7 @@ Funciona con **Docker** (con el plugin `docker compose`) o con **Podman** (con
 `podman-compose`). En el servidor:
 
 ```bash
-git clone https://github.com/ahbelisario/fsms.git budodesk && cd budodesk
+git clone https://github.com/ahbelisario/budodesk.git budodesk && cd budodesk
 git checkout main            # o v2 mientras no se haga merge
 ./deploy.sh
 ```
