@@ -15,7 +15,7 @@ export class ApiError extends Error {
   status: number;
   code: string;
   // Validación: lista de campos. Límite del plan (PLAN_LIMIT): { feature, limit, current }
-  details?: { field: string; message: string }[] & { feature?: string; limit?: number; current?: number };
+  details?: { field: string; message: string }[] & { feature?: string; limit?: number; current?: number; plan_name?: string };
   constructor(status: number, code: string, message: string, details?: ApiError['details']) {
     super(message);
     this.status = status;

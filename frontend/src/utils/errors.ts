@@ -7,7 +7,7 @@ export function errorMessage(e: unknown): string {
     // Límite del plan de BudoDesk: texto propio con los números
     if (e.code === 'PLAN_LIMIT') {
       const d = e.details ?? ({} as NonNullable<ApiError['details']>);
-      return `${t(`plan.limit_${d.feature ?? 'generic'}`, { limit: d.limit, current: d.current, defaultValue: t('plan.limit_generic') })} ${t('plan.howToUpgrade')}`;
+      return `${t(`plan.limit_${d.feature ?? 'generic'}`, { limit: d.limit, current: d.current, plan: d.plan_name ?? '', defaultValue: t('plan.limit_generic') })} ${t('plan.howToUpgrade')}`;
     }
     const key = `errors.${e.code}`;
     if (i18n.translations[i18n.locale] && i18n.t(key, { defaultValue: '' })) return t(key);

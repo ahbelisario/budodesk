@@ -11,7 +11,14 @@ export type PlatformDojo = {
   plan: DojoPlan; status: DojoStatus; trial_ends_at: string | null; timezone: string; currency: string; language: 'es' | 'en';
   country_code: string; created_at: string; members_active: number; students_active: number; last_activity: string | null;
   owners: string | null; owner_emails: string | null; is_member: boolean;
+  // Plan de BudoDesk: el que aplica (la prueba es como Pro), sus límites con las excepciones del dojo, y el uso
+  effective_plan: 'basic' | 'pro'; plan_name: string; custom_limits: boolean; locations_active: number;
+  limits: { students: number | null; locations: number | null; finance: boolean };
+  limit_students: number | null; limit_locations: number | null; limit_finance: number | null;
 };
+
+/** Plan de BudoDesk (lo que el dojo paga): límites editables. max_* null = sin límite */
+export type SaasPlan = { code: 'basic' | 'pro'; name: string; max_students: number | null; max_locations: number | null; finance: boolean; dojos: number | null };
 
 export type NewDojo = {
   name: string; short_name?: string | null; slug: string; timezone: string; currency: string; language: 'es' | 'en';
@@ -58,6 +65,9 @@ export type PlatformAlert = {
 };
 
 export const platformApi = {
+  plans: () => api.get<SaasPlan[]>('/platform/plans'),
+  savePlan: (code: string, b: { name?: string; max_students?: number | null; max_locations?: number | null; finance?: boolean }) =>
+    api.put<SaasPlan>(`/platform/plans/${code}`, b),
   monitoring: (status: 'open' | 'resolved' | 'all' = 'all') =>
     api.get<{ settings: MonitorSettings; status: MonitorStatus; alerts: PlatformAlert[] }>('/platform/monitoring', { status }),
   saveMonitoring: (b: { alerts_emails?: string; alerts_push?: boolean; heartbeat_url?: string | null; disk_alert_pct?: number }) =>
@@ -66,7 +76,7 @@ export const platformApi = {
   resolveAlert: (id: number) => api.post<{ id: number }>(`/platform/monitoring/alerts/${id}/resolve`, {}),
   dojos: () => api.get<PlatformDojo[]>('/platform/dojos'),
   createDojo: (b: NewDojo) => api.post<CreatedDojo>('/platform/dojos', b),
-  updateDojo: (id: number, b: Partial<Pick<PlatformDojo, 'name' | 'short_name' | 'plan' | 'status' | 'trial_ends_at'>>) =>
+  updateDojo: (id: number, b: Partial<Pick<PlatformDojo, 'name' | 'short_name' | 'plan' | 'status' | 'trial_ends_at' | 'limit_students' | 'limit_locations'>> & { limit_finance?: boolean | null }) =>
     api.patch<PlatformDojo>(`/platform/dojos/${id}`, b),
   /** Elimina el dojo y sus datos (solo cancelados). No se puede deshacer. */
   deleteDojo: (id: number, confirmSlug: string) =>

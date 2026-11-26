@@ -192,7 +192,7 @@ function LookTab({ base, onSaved }: { base: DojoSettings; onSaved: (d: DojoSetti
 // ---------------------------------------------------------------------------
 function LocationsCard() {
   const data = useApi(() => dojoApi.locations(), []);
-  const { isBasic } = useSubscription();
+  const { limits, planName } = useSubscription();
   const [dlg, setDlg] = useState<{ open: boolean; loc: Location | null }>({ open: false, loc: null });
   const [name, setName] = useState(''); const [address, setAddress] = useState(''); const [active, setActive] = useState(true);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
@@ -209,7 +209,7 @@ function LocationsCard() {
   return (
     <Card style={{ gap: space.sm }}>
       <SectionHeader title={dt('locations')} action={<Button label={dt('newLocation')} size="sm" variant="secondary" icon="plus" onPress={() => open(null)} />} />
-      <Text variant="small" color={palette.ink2}>{dt('locationsHint')}{isBasic ? ` ${t('plan.locationsHint')}` : ''}</Text>
+      <Text variant="small" color={palette.ink2}>{dt('locationsHint')}{limits?.locations != null ? ` ${t('plan.locationsHint', { plan: planName, limit: limits.locations })}` : ''}</Text>
       {data.loading ? <Loading /> : (data.data ?? []).length === 0 ? <Text color={palette.ink2}>{dt('noLocations')}</Text> : (data.data ?? []).map((l, i) => (
         <View key={l.id}>
           {i > 0 ? <Divider /> : null}

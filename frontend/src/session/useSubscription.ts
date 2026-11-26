@@ -20,5 +20,6 @@ export function useSubscription() {
     dojoApi.subscription().then(setSub).catch(() => setSub(null));
   }, [dojo?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { reload(); supportContact().then(setEmail); }, [reload]);
-  return { sub, reload, contactEmail: email, isBasic: sub?.effective === 'basic' };
+  // Límites que aplican (null = sin límite) y el nombre del plan, para los avisos
+  return { sub, reload, contactEmail: email, limits: sub?.limits ?? null, planName: sub?.plan_name ?? '' };
 }

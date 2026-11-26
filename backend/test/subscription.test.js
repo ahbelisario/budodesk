@@ -131,3 +131,65 @@ describe('Pro, prueba y bajar de plan', () => {
     ok(await api('patch', `/members/${m.user_id}`, T.admin, { notes: 'sigue igual' }));
   });
 });
+
+describe('planes editables y excepciones por dojo', () => {
+  let S;
+  before(async () => {
+    await pool.query('UPDATE users SET is_superadmin = 1 WHERE id = 1');
+    S = await login('admin@seikoukan.mx'); // en modo superadmin también
+    await pool.query("UPDATE dojos SET plan = 'basic', status = 'active', limit_students = NULL, limit_locations = NULL, limit_finance = NULL WHERE id = 1");
+  });
+
+  test('el superadmin edita los límites de un plan y se aplican al momento', async () => {
+    const plans = ok(await api('get', '/platform/plans', S));
+    assert.deepEqual(plans.map((p) => p.code), ['basic', 'pro']);
+    assert.equal(plans[0].max_students, 50);
+    assert.equal((await api('put', '/platform/plans/basic', T.admin.replace(/./g, 'x'))).status, 401);
+    const current = ok(await api('get', '/dojo/subscription', T.admin)).usage.students;
+    const p = ok(await api('put', '/platform/plans/basic', S, { name: 'Esencial', max_students: current + 1, finance: true }));
+    assert.equal(p.name, 'Esencial');
+    const s = ok(await api('get', '/dojo/subscription', T.admin));
+    assert.equal(s.plan_name, 'Esencial');
+    assert.equal(s.limits.students, current + 1);
+    ok(await api('get', '/finance/entries', T.admin)); // ahora el plan incluye finanzas
+    ok(await api('post', '/members', T.admin, { first_name: 'Cabe uno', roles: ['student'] }), 201);
+    const r = await api('post', '/members', T.admin, { first_name: 'Ya no', roles: ['student'] });
+    assert.equal(r.body.code, 'PLAN_LIMIT');
+    assert.match(r.body.message, /Esencial/);
+    // sin límite
+    ok(await api('put', '/platform/plans/basic', S, { max_students: null }));
+    ok(await api('post', '/members', T.admin, { first_name: 'Sin tope', roles: ['student'] }), 201);
+    ok(await api('put', '/platform/plans/basic', S, { name: 'Básico', max_students: 50, finance: false }));
+  });
+
+  test('excepción de un dojo: más alumnos, sin límite o finanzas aunque el plan no las tenga', async () => {
+    const used = ok(await api('get', '/dojo/subscription', T.admin)).usage.students;
+    let d = ok(await api('patch', '/platform/dojos/1', S, { limit_students: used + 2, limit_finance: true }));
+    assert.equal(d.limits.students, used + 2);
+    assert.equal(d.limits.finance, true);
+    assert.equal(d.custom_limits, true);
+    assert.equal(d.students_active, used);
+    ok(await api('get', '/reports/finance', T.admin));
+    ok(await api('post', '/members', T.admin, { first_name: 'Excepción', roles: ['student'] }), 201);
+    // 0 = sin límite
+    d = ok(await api('patch', '/platform/dojos/1', S, { limit_students: 0 }));
+    assert.equal(d.limits.students, null);
+    // quitar la excepción vuelve a lo del plan
+    d = ok(await api('patch', '/platform/dojos/1', S, { limit_students: null, limit_finance: null }));
+    assert.equal(d.limits.students, 50);
+    assert.equal(d.custom_limits, false);
+    assert.equal((await api('get', '/reports/finance', T.admin)).body.code, 'PLAN_LIMIT');
+  });
+
+  test('las tarjetas del panel traen plan, uso y límites', async () => {
+    const list = ok(await api('get', '/platform/dojos', S));
+    const d = list.find((x) => x.id === 1);
+    assert.equal(d.plan_name, 'Básico');
+    assert.equal(d.effective_plan, 'basic');
+    assert.ok(d.students_active > 50);
+    assert.equal(d.locations_active >= 1, true);
+    assert.deepEqual(d.limits, { students: 50, locations: 1, finance: false });
+    const other = list.find((x) => x.id === 2);
+    assert.equal(other.limits.students, null, 'el otro dojo es Pro/prueba');
+  });
+});

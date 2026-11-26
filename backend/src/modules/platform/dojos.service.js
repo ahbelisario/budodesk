@@ -4,6 +4,7 @@ const { AppError, badRequest, conflict, notFound } = require('../../utils/errors
 const { audit } = require('../../utils/audit');
 const accountService = require('../account/account.service');
 const { todayIn } = require('../../utils/dates');
+const subscription = require('../../services/subscription');
 const fs = require('fs');
 const path = require('path');
 const env = require('../../config/env');
@@ -14,6 +15,8 @@ const RESERVED = new Set(['www', 'api', 'app', 'admin', 'dev', 'mail', 'smtp', '
 async function listDojos(viewerId) {
   const [rows] = await pool.query(
     `SELECT d.id, d.slug, d.name, d.short_name, d.logo_url, d.color_primary, d.plan, d.status, d.trial_ends_at,
+            d.limit_students, d.limit_locations, d.limit_finance,
+            (SELECT COUNT(*) FROM dojo_locations l WHERE l.dojo_id = d.id AND l.active = 1) AS locations_active,
             d.timezone, d.currency, d.language, d.country_code, d.created_at,
             (SELECT COUNT(*) FROM dojo_members m WHERE m.dojo_id = d.id AND m.status = 'active') AS members_active,
             (SELECT COUNT(DISTINCT r.user_id) FROM dojo_member_roles r
@@ -30,7 +33,17 @@ async function listDojos(viewerId) {
             EXISTS (SELECT 1 FROM dojo_members m WHERE m.dojo_id = d.id AND m.user_id = :viewer AND m.status = 'active') AS is_member
        FROM dojos d
       ORDER BY d.status = 'cancelled', d.name`, { viewer: viewerId });
-  return rows.map((d) => ({ ...d, is_member: !!d.is_member }));
+  // Plan que aplica y sus límites (con las excepciones del dojo), para las tarjetas del panel
+  const plans = Object.fromEntries((await subscription.listPlans()).map((p) => [p.code, p]));
+  return rows.map((d) => {
+    const effective = subscription.effectivePlan(d);
+    const plan = plans[effective];
+    return {
+      ...d, is_member: !!d.is_member, effective_plan: effective, plan_name: plan?.name ?? effective,
+      limits: subscription.limitsFor(plan ?? {}, d),
+      custom_limits: [d.limit_students, d.limit_locations, d.limit_finance].some((v) => v != null),
+    };
+  });
 }
 
 async function getDojo(id, viewerId) {
@@ -151,6 +164,13 @@ async function updateDojo(id, b, actorId, ip) {
     `UPDATE dojos SET name = :name, short_name = :short_name, plan = :plan, status = :status, trial_ends_at = :trial_ends_at,
             trial_notices = IF(:reset, '', trial_notices)
       WHERE id = :id`, { ...next, trial_ends_at: ymd(next.trial_ends_at), reset: resetNotices ? 1 : 0, id });
+  // Excepciones del dojo (null = lo del plan; 0 en alumnos/sedes = sin límite)
+  const LIMIT_COLS = ['limit_students', 'limit_locations', 'limit_finance'];
+  const limits = LIMIT_COLS.filter((k) => b[k] !== undefined);
+  if (limits.length) {
+    await pool.query(`UPDATE dojos SET ${limits.map((k) => `${k} = :${k}`).join(', ')} WHERE id = :id`,
+      { id, ...Object.fromEntries(limits.map((k) => [k, k === 'limit_finance' && b[k] != null ? (b[k] ? 1 : 0) : b[k]])) });
+  }
   await audit(pool, { dojoId: id, userId: actorId, action: 'update', entity: 'platform_dojo', entityId: id, ip, before: prev, after: b });
   return getDojo(id, actorId);
 }

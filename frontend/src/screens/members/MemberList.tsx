@@ -121,7 +121,7 @@ export function MemberList() {
 
   const filtered = !!(dq || role || disc || status !== 'active');
   // Plan Básico: uso de alumnos activos y aviso al llegar al límite
-  const { sub, isBasic, contactEmail, reload: reloadSub } = useSubscription();
+  const { sub, planName, contactEmail, reload: reloadSub } = useSubscription();
   const limit = sub?.limits.students ?? null;
   const used = sub?.usage.students ?? 0;
   useEffect(() => { reloadSub(); }, [total]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -132,8 +132,8 @@ export function MemberList() {
         <View style={{ gap: 2 }}>
           <Text variant="title" accessibilityRole="header">{mt('title')}</Text>
           {!loading ? <Text variant="small" color={palette.ink2}>{mt('subtitle', { count: total })}</Text> : null}
-          {canCreate && isBasic && limit != null ? (
-            <Text variant="small" color={used >= limit ? palette.danger : palette.ink2}>{t('plan.studentsUsage', { current: used, limit })}</Text>
+          {canCreate && limit != null ? (
+            <Text variant="small" color={used >= limit ? palette.danger : palette.ink2}>{t('plan.studentsUsage', { current: used, limit, plan: planName })}</Text>
           ) : null}
         </View>
         {canCreate ? <Button label={mt('newMember')} icon="user-plus" onPress={() => router.push('/members/new')} /> : null}
@@ -175,9 +175,9 @@ export function MemberList() {
         ) : null}
       </View>
 
-      {canCreate && isBasic && limit != null && used >= limit ? (
+      {canCreate && limit != null && used >= limit ? (
         <PlanNotice contactEmail={contactEmail}
-          text={used > limit ? t('plan.studentsOver', { current: used, limit }) : t('plan.studentsFull', { limit })} />
+          text={used > limit ? t('plan.studentsOver', { current: used, limit, plan: planName }) : t('plan.studentsFull', { limit, plan: planName })} />
       ) : null}
       {error ? <Notice tone="danger">{error}</Notice> : null}
 

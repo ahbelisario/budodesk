@@ -5,6 +5,8 @@
  *   POST   /dojos                 alta de dojo (+ dueño, + copiar configuración)
  *   PATCH  /dojos/:id             nombre, plan, estado, fin de prueba
  *   DELETE /dojos/:id             elimina el dojo y sus datos (solo cancelados; body { confirm_slug })
+ *   GET    /plans                 planes de BudoDesk (Básico, Pro) con sus límites
+ *   PUT    /plans/:code           nombre y límites de un plan
  *   GET    /monitoring            ajustes, estado y alertas (?status=open|resolved|all)
  *   PUT    /monitoring/settings   correos de alerta, push, latido, umbral de disco
  *   POST   /monitoring/test       manda una alerta de prueba
@@ -95,6 +97,10 @@ const updateSchema = z.object({
   plan: z.enum(PLANS).optional(),
   status: z.enum(STATUSES).optional(),
   trial_ends_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+  // Excepciones del dojo: null = lo del plan; 0 = sin límite
+  limit_students: z.number().int().min(0).max(100000).nullable().optional(),
+  limit_locations: z.number().int().min(0).max(1000).nullable().optional(),
+  limit_finance: z.boolean().nullable().optional(),
 });
 
 router.patch('/dojos/:id', validate({ params: z.object({ id }), body: updateSchema }), async (req, res) => {
@@ -105,6 +111,29 @@ router.delete('/dojos/:id', validate({ params: z.object({ id }), body: z.object(
   async (req, res) => {
     res.json({ status: 'success', data: await dojos.deleteDojo(req.valid.params.id, req.valid.body, req.auth, req.ip) });
   });
+
+// ===========================================================================
+// Planes de BudoDesk
+// ===========================================================================
+const subscription = require('../../services/subscription');
+router.get('/plans', async (_req, res) => {
+  res.json({ status: 'success', data: await subscription.listPlans() });
+});
+
+router.put('/plans/:code', validate({
+  params: z.object({ code: z.enum(subscription.PLAN_CODES) }),
+  body: z.object({
+    name: z.string().trim().min(1).max(60).optional(),
+    max_students: z.number().int().min(1).max(100000).nullable().optional(), // null = sin límite
+    max_locations: z.number().int().min(1).max(1000).nullable().optional(),
+    finance: z.boolean().optional(),
+  }),
+}), async (req, res) => {
+  const plan = await subscription.updatePlan(req.valid.params.code, req.valid.body, req.auth.userId);
+  await audit(require('../../db/pool').pool, {
+    userId: req.auth.userId, action: 'update', entity: 'saas_plan', entityId: req.valid.params.code, ip: req.ip, after: req.valid.body });
+  res.json({ status: 'success', data: plan });
+});
 
 // ===========================================================================
 // Monitoreo

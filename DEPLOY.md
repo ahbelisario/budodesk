@@ -206,7 +206,8 @@ dinero llega directo a su cuenta.
 
 ## Planes de BudoDesk (Básico y Pro)
 
-El plan se cambia en **Plataforma → Dojos → Editar**.
+El plan de cada dojo se cambia en **Plataforma → Dojos → Editar**. Los límites de
+cada plan se editan en **Plataforma → Planes**. Estos son los valores iniciales:
 
 | | Básico | Pro | En prueba |
 |---|---|---|---|
@@ -214,12 +215,18 @@ El plan se cambia en **Plataforma → Dojos → Editar**.
 | Sedes activas | 1 | varias | como Pro |
 | Finanzas (gastos e ingresos, por cobrar) | no | sí | como Pro |
 
+- **Excepciones por dojo:** en Editar de cada dojo se le pueden dar otros límites
+  de alumnos o sedes (vacío = lo de su plan; 0 = sin límite) y finanzas sí/no.
+  La tarjeta del dojo lo marca «Con excepción».
+- Las tarjetas de Dojos muestran el plan y el uso (p. ej. «Básico · 48/50 alumnos
+  · 1/1 sedes»): en ámbar si los alumnos van al 90 %, en rojo si ya pasó un límite.
+
 - Al llegar al límite no se pueden dar de alta ni reactivar alumnos; quien se
   registra solo queda **pendiente**. El dojo ve cuántos lleva y a quién escribir.
 - Si un dojo baja a Básico **conserva todo**: nada se borra ni se desactiva, solo
   no puede agregar más mientras exceda el límite. Sus finanzas siguen guardadas
   y se ven de nuevo al volver a Pro.
-- Los límites están en `backend/src/services/subscription.js`.
+- La lógica está en `backend/src/services/subscription.js` y los valores en la tabla `saas_plans`.
 
 ## Monitoreo y alertas
 

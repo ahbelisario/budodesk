@@ -4,7 +4,7 @@ import { Platform as RNPlatform, Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   downloadBackup, fileSize, platformApi, type Backup, type BackupSettings, type DojoPlan, type DojoStatus,
-  type NewDojo, type PlatformDojo, type SettingsPatch,
+  type NewDojo, type PlatformDojo, type SaasPlan, type SettingsPatch,
 } from '../../api/platform';
 import { useSession } from '../../session/SessionProvider';
 import { useApi } from '../../utils/useApi';
@@ -21,10 +21,11 @@ import { signupApi, type Signup, type SignupSettings, type SignupStatus } from '
 import { dojoHost } from '../../config';
 import { FilterChips } from '../../ui/forms';
 import { MonitoringTab } from './Monitoring';
+import { PlansTab } from './Plans';
 
 const pt = (k: string, o?: Record<string, unknown>) => t(`platform.${k}`, o);
 type Msg = { tone: 'success' | 'danger'; text: string } | null;
-type TabKey = 'dojos' | 'signups' | 'monitoring' | 'backups';
+type TabKey = 'dojos' | 'signups' | 'plans' | 'monitoring' | 'backups';
 
 const TIMEZONES = ['America/Mexico_City', 'America/Monterrey', 'America/Chihuahua', 'America/Hermosillo', 'America/Mazatlan', 'America/Tijuana',
   'America/Cancun', 'America/Bogota', 'America/Lima', 'America/Santiago', 'America/Argentina/Buenos_Aires', 'America/New_York',
@@ -61,6 +62,19 @@ async function copyText(text: string) {
 // ===========================================================================
 // Dojos
 // ===========================================================================
+/** «Básico · 48/50 alumnos · 1/1 sedes»: ámbar con los alumnos al 90 % o más, rojo si ya pasó algún límite */
+function UsageLine({ d }: { d: PlatformDojo }) {
+  const ratio = (used: number, limit: number | null) => (limit == null ? 0 : used / limit);
+  const over = ratio(d.students_active, d.limits.students) > 1 || ratio(d.locations_active, d.limits.locations) > 1;
+  const color = over ? palette.danger : ratio(d.students_active, d.limits.students) >= 0.9 ? palette.warning : palette.ink2;
+  const parts = [
+    d.limits.students == null ? pt('usage_studentsFree', { used: d.students_active })
+      : pt('usage_students', { used: d.students_active, limit: d.limits.students }),
+    d.limits.locations == null ? null : pt('usage_locations', { used: d.locations_active, limit: d.limits.locations }),
+  ].filter(Boolean);
+  return <Text variant="smallStrong" color={color}>{`${d.plan_name} · ${parts.join(' · ')}`}</Text>;
+}
+
 function DojoCard({ d, current, onEnter, onEdit, entering }: {
   d: PlatformDojo; current: boolean; onEnter: () => void; onEdit: () => void; entering: boolean;
 }) {
@@ -79,14 +93,16 @@ function DojoCard({ d, current, onEnter, onEdit, entering }: {
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
         <Badge label={pt(`status_${d.status}`)} tone={STATUS_TONE[d.status]} />
-        <Badge label={pt(`plan_${d.plan}`)} tone="neutral" />
+        <Badge label={d.plan === 'trial' ? pt('plan_trial') : d.plan_name} tone="neutral" />
+        {d.custom_limits ? <Badge label={pt('custom')} tone="info" /> : null}
         {d.is_member ? <Badge label={pt('youAreMember')} tone="neutral" /> : null}
         {current ? <Badge label="✓" tone="dark" /> : null}
       </View>
       <View style={{ gap: 2 }}>
         <Text variant="small" color={palette.ink2}>
-          {`${pt('members', { count: d.members_active })} · ${pt('students', { count: d.students_active })}`}
+          {pt('members', { count: d.members_active })}
         </Text>
+        <UsageLine d={d} />
         <Text variant="small" color={palette.ink2} numberOfLines={2}>
           {d.owners ? pt('owner', { name: d.owners }) : pt('noOwner')}
           {d.owner_emails ? ` (${d.owner_emails})` : ''}
@@ -217,16 +233,47 @@ function DeleteDojoSection({ dojo, onDeleted }: { dojo: PlatformDojo; onDeleted:
   );
 }
 
+type Ex = { students: string; locations: string; finance: '' | 'yes' | 'no' };
+/** Límites propios de un dojo encima de los de su plan */
+function ExceptionsSection({ plan, ex, onChange }: { plan?: SaasPlan; ex: Ex; onChange: (e: Ex) => void }) {
+  const val = (n: number | null | undefined) => (n == null ? pt('ex_unlimited') : String(n));
+  return (
+    <View style={{ gap: space.sm, paddingTop: space.xs }}>
+      <Text variant="bodyStrong">{pt('ex_title')}</Text>
+      <Text variant="small" color={palette.ink2}>{pt('ex_hint', { plan: plan?.name ?? '—' })}</Text>
+      <FormGrid>
+        <Field label={pt('ex_students')} value={ex.students} keyboardType="number-pad" placeholder={pt('ex_planValue', { value: val(plan?.max_students) })}
+          onChangeText={(x) => onChange({ ...ex, students: x.replace(/\D/g, '').slice(0, 6) })} />
+        <Field label={pt('ex_locations')} value={ex.locations} keyboardType="number-pad" placeholder={pt('ex_planValue', { value: val(plan?.max_locations) })}
+          onChangeText={(x) => onChange({ ...ex, locations: x.replace(/\D/g, '').slice(0, 4) })} />
+      </FormGrid>
+      <Select label={pt('ex_finance')} value={ex.finance} onChange={(x) => onChange({ ...ex, finance: (x ?? '') as Ex['finance'] })}
+        options={[
+          { value: '', label: pt('ex_financePlan', { value: plan ? pt(plan.finance ? 'ex_yes' : 'ex_no') : '—' }) },
+          { value: 'yes', label: pt('ex_financeYes') }, { value: 'no', label: pt('ex_financeNo') },
+        ]} />
+    </View>
+  );
+}
+
 function EditDojoDialog({ dojo, onClose, onSaved, onDeleted }: {
   dojo: PlatformDojo | null; onClose: () => void; onSaved: (d: PlatformDojo) => void; onDeleted: (msg: string) => void;
 }) {
   const [v, setV] = useState<Pick<PlatformDojo, 'name' | 'short_name' | 'plan' | 'status' | 'trial_ends_at'> | null>(null);
+  // Excepciones (texto vacío = lo del plan; '0' = sin límite) y finanzas ('' = según el plan)
+  const [ex, setEx] = useState({ students: '', locations: '', finance: '' as '' | 'yes' | 'no' });
+  const plans = useApi(() => platformApi.plans(), []);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
     if (dojo) {
       setV({ name: dojo.name, short_name: dojo.short_name, plan: dojo.plan, status: dojo.status,
         trial_ends_at: dojo.trial_ends_at ? String(dojo.trial_ends_at).slice(0, 10) : null });
+      setEx({
+        students: dojo.limit_students == null ? '' : String(dojo.limit_students),
+        locations: dojo.limit_locations == null ? '' : String(dojo.limit_locations),
+        finance: dojo.limit_finance == null ? '' : dojo.limit_finance ? 'yes' : 'no',
+      });
       setErr(null);
     }
   }, [dojo]);
@@ -239,6 +286,9 @@ function EditDojoDialog({ dojo, onClose, onSaved, onDeleted }: {
       onSaved(await platformApi.updateDojo(dojo!.id, {
         name: v!.name.trim(), short_name: v!.short_name?.trim() || null, plan: v!.plan, status: v!.status,
         trial_ends_at: v!.status === 'trial' || v!.status === 'expired' ? v!.trial_ends_at : null,
+        limit_students: ex.students.trim() === '' ? null : Number(ex.students),
+        limit_locations: ex.locations.trim() === '' ? null : Number(ex.locations),
+        limit_finance: ex.finance === '' ? null : ex.finance === 'yes',
       }));
     } catch (e) { setErr(errorMessage(e)); } finally { setBusy(false); }
   }
@@ -261,6 +311,8 @@ function EditDojoDialog({ dojo, onClose, onSaved, onDeleted }: {
       {v.status === 'expired' ? <Text variant="small" color={palette.ink2}>{pt('expiredHint')}</Text> : null}
       {v.status === 'suspended' && dojo.status !== 'suspended' ? <Notice tone="warning">{pt('suspendWarn')}</Notice> : null}
       {v.status === 'cancelled' && dojo.status !== 'cancelled' ? <Notice tone="warning">{pt('cancelWarn')}</Notice> : null}
+      <ExceptionsSection plan={(plans.data ?? []).find((p) => p.code === (v.status === 'trial' || v.plan === 'trial' ? 'pro' : v.plan))}
+        ex={ex} onChange={setEx} />
       {err ? <Notice tone="danger">{err}</Notice> : null}
       <DeleteDojoSection dojo={dojo} onDeleted={onDeleted} />
     </Dialog>
@@ -760,7 +812,7 @@ function BackupsTab() {
 export function PlatformScreen() {
   useLanguage();
   const params = useLocalSearchParams<{ tab?: string }>();
-  const initial: TabKey = (['backups', 'signups', 'monitoring'] as string[]).includes(params.tab ?? '') ? params.tab as TabKey : 'dojos';
+  const initial: TabKey = (['backups', 'signups', 'plans', 'monitoring'] as string[]).includes(params.tab ?? '') ? params.tab as TabKey : 'dojos';
   const [tab, setTab] = useState<TabKey>(initial);
   const [pending, setPending] = useState(0);
   const [openAlerts, setOpenAlerts] = useState(0);
@@ -768,7 +820,7 @@ export function PlatformScreen() {
     signupApi.list('pending').then((r) => setPending(r.pending)).catch(() => {});
     platformApi.monitoring('open').then((r) => setOpenAlerts(r.status.open_alerts)).catch(() => {});
   }, []);
-  const tabs = useMemo(() => (['dojos', 'signups', 'monitoring', 'backups'] as const).map((k) => ({
+  const tabs = useMemo(() => (['dojos', 'signups', 'plans', 'monitoring', 'backups'] as const).map((k) => ({
     key: k, label: pt(`tab_${k}`),
     badge: k === 'signups' && pending ? pending : k === 'monitoring' && openAlerts ? openAlerts : undefined,
   })), [pending, openAlerts]);
@@ -781,6 +833,7 @@ export function PlatformScreen() {
       <Tabs value={tab} onChange={setTab} tabs={tabs} />
       <View key={tab}>
         {tab === 'dojos' ? <DojosTab /> : tab === 'signups' ? <SignupsTab onPendingChange={setPending} />
+          : tab === 'plans' ? <PlansTab />
           : tab === 'monitoring' ? <MonitoringTab onOpenChange={setOpenAlerts} /> : <BackupsTab />}
       </View>
     </Screen>

@@ -46,6 +46,8 @@ export type AuditEntry = { id: number; action: string; entity: string; entity_id
 /** Plan de BudoDesk del dojo (lo que el dojo le paga a BudoDesk) */
 export type Subscription = {
   plan: 'trial' | 'basic' | 'pro' | null; status: string | null; effective: 'basic' | 'pro';
+  /** Nombre del plan que aplica (editable en Plataforma → Planes) y si el dojo tiene excepciones */
+  plan_name: string; custom: boolean;
   limits: { students: number | null; locations: number | null; finance: boolean };
   usage: { students: number; locations: number };
 };
