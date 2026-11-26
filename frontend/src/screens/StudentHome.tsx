@@ -17,6 +17,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { t } from '../i18n';
 import { dayLong, dayShort, hm, money, parseDay, weekdayShort } from '../utils/format';
 import { errorMessage } from '../utils/errors';
+import { PushNudge } from '../push/PushNudge';
 
 // ---------------------------------------------------------------------------
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -265,6 +266,7 @@ export function StudentHome() {
       </View>
 
       {flash ? <Notice tone={flash.tone}>{flash.text}</Notice> : null}
+      <PushNudge />
       {progress.error ? <Notice tone="danger">{progress.error}</Notice> : null}
       {loading ? <Loading /> : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md, alignItems: 'flex-start' }}>

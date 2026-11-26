@@ -6,6 +6,7 @@ import { dojoEs } from './dojo';
 import { platformEs } from './platform';
 import { onlineEs } from './online';
 import { reportsEs } from './reports';
+import { pushEs } from './push';
 export const es = {
   common: {
     loading: 'Cargando…',
@@ -181,6 +182,7 @@ export const es = {
   platform: platformEs,
   online: onlineEs,
   reports: reportsEs,
+  push: pushEs,
   ranks: ranksEs,
   billing: billingEs,
   classes: classesEs,

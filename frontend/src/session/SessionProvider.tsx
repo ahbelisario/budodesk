@@ -12,6 +12,7 @@ import { api, applyAuth, refreshSession, setAuthListener } from '../api/client';
 import { tokenStore } from '../api/tokenStore';
 import type { AuthPayload, DojoSummary, Minor, Role, User } from '../api/types';
 import { setLanguage } from '../i18n';
+import { forgetPushOnLogout, syncPushOnLogin } from '../push/webPush';
 
 type Status = 'loading' | 'signedOut' | 'chooseDojo' | 'ready';
 
@@ -78,10 +79,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (identifier: string, password: string, dojoSlug?: string | null) => {
     const data = await api.public.post<AuthPayload>('/auth/login', { identifier, password, dojo_slug: dojoSlug || undefined });
     await applyAuth(data);
+    syncPushOnLogin(); // si este navegador ya tenía avisos activos, ahora le llegan a quien entró
     return data;
   }, []);
 
   const logout = useCallback(async () => {
+    await forgetPushOnLogout(); // antes de perder la sesión
     try { await api.post('/auth/logout'); } catch { /* sin red: igual se cierra localmente */ }
     await tokenStore.clear();
     apply(null);

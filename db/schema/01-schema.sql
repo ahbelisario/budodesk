@@ -1037,8 +1037,9 @@ CREATE TABLE `notification_deliveries` (
 CREATE TABLE `push_tokens` (
   `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `user_id`      INT UNSIGNED NOT NULL,
-  `token`        VARCHAR(255) NOT NULL,
+  `token`        VARCHAR(255) NOT NULL COMMENT 'Expo: ExponentPushToken[…] · navegador: web:<sha256 del endpoint>',
   `platform`     ENUM('ios','android','web') NOT NULL,
+  `subscription` JSON NULL COMMENT 'web push: { endpoint, keys: { p256dh, auth } }',
   `device_name`  VARCHAR(100) NULL,
   `last_seen_at` DATETIME NULL,
   `created_at`   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1090,6 +1091,8 @@ CREATE TABLE `platform_settings` (
     `s3_secret_enc`       TEXT NULL COMMENT 'cifrado con BACKUP_ENCRYPTION_KEY',
     `s3_force_path_style` TINYINT(1) NOT NULL DEFAULT 0,
     `s3_keep`             SMALLINT UNSIGNED NOT NULL DEFAULT 10 COMMENT 'copias en S3 (1-100)',
+    `vapid_public_key`    VARCHAR(120) NULL COMMENT 'web push: se generan solas la primera vez',
+    `vapid_private_key`   VARCHAR(120) NULL,
     `updated_by`          INT UNSIGNED NULL,
     `updated_at`          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`)

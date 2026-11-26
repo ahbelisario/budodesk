@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSession } from '../session/SessionProvider';
 import { api, ApiError } from '../api/client';
 import { meApi, profileDiff, type MyProfile } from '../api/members';
@@ -19,6 +19,7 @@ import { getLanguage, setLanguage, t, useLanguage, type Lang } from '../i18n';
 import { dateTimeShort, fullName } from '../utils/format';
 import { PersonForm, PhotoPicker, type PersonValue } from './members/PersonForm';
 import { mt } from './members/bits';
+import { DevicePushCard } from '../push/DevicePushCard';
 
 type TabKey = 'data' | 'children' | 'account';
 type Msg = { tone: 'success' | 'danger'; text: string } | null;
@@ -181,6 +182,7 @@ function AccountTab() {
 
       <Card>
         <SectionHeader title={mt('notifications')} />
+        <DevicePushCard pushPrefOn={!!notif.notify_push} pushPrefLabel={mt('n_push')} />
         {prof.loading ? <Loading /> : N.map(([k, label], i) => (
           <View key={k}>{i > 0 ? <Divider /> : null}<SwitchRow label={label} value={!!notif[k]} onChange={(v) => toggle(k, v)} /></View>
         ))}
@@ -254,7 +256,8 @@ function describeAgent(ua: string | null) {
 export function Profile() {
   useLanguage();
   const { user, roles, minors, reload } = useSession();
-  const [tab, setTab] = useState<TabKey>('data');
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState<TabKey>(params.tab === 'account' ? 'account' : params.tab === 'children' ? 'children' : 'data');
   if (!user) return null;
   const tabs: { key: TabKey; label: string }[] = [{ key: 'data', label: mt('myData') }];
   if (minors.length) tabs.push({ key: 'children', label: mt('myChildren') });

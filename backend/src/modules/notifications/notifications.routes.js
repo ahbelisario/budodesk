@@ -64,6 +64,56 @@ notifications.delete('/push-tokens', validate({ body: z.object({ token: z.string
   res.json({ status: 'success' });
 });
 
+// Notificaciones del navegador (web push): llave pública, suscribir, quitar y probar
+const webpush = require('./webpush.service');
+
+notifications.get('/web-push/key', async (req, res) => {
+  res.json({ status: 'success', data: { public_key: (await webpush.vapidKeys()).publicKey } });
+});
+
+const b64url = z.string().trim().min(10).max(200).regex(/^[A-Za-z0-9_-]+=*$/, 'Llave inválida');
+notifications.post('/web-push', validate({
+  body: z.object({
+    subscription: z.object({
+      endpoint: z.string().trim().url().max(1000).refine((u) => u.startsWith('https://'), 'El endpoint debe ser https'),
+      expirationTime: z.number().nullish(),
+      keys: z.object({ p256dh: b64url, auth: b64url }),
+    }),
+    device_name: z.string().trim().max(100).optional(),
+  }),
+}), async (req, res) => {
+  const { subscription, device_name: name } = req.valid.body;
+  const token = webpush.tokenFor(subscription.endpoint);
+  // Si el navegador ya estaba registrado con otra cuenta (equipo compartido), pasa a esta
+  await pool.query(
+    `INSERT INTO push_tokens (user_id, token, platform, subscription, device_name, last_seen_at)
+     VALUES (:u, :t, 'web', :s, :n, NOW())
+     ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), subscription = VALUES(subscription),
+                             device_name = VALUES(device_name), last_seen_at = NOW()`,
+    { u: req.auth.userId, t: token, s: JSON.stringify({ endpoint: subscription.endpoint, keys: subscription.keys }), n: name ?? null });
+  const [[{ n }]] = await pool.query("SELECT COUNT(*) AS n FROM push_tokens WHERE user_id = :u AND platform = 'web'", { u: req.auth.userId });
+  res.json({ status: 'success', data: { devices: Number(n) } });
+});
+
+notifications.delete('/web-push', validate({ body: z.object({ endpoint: z.string().trim().max(1000) }) }), async (req, res) => {
+  await pool.query('DELETE FROM push_tokens WHERE user_id = :u AND token = :t', { u: req.auth.userId, t: webpush.tokenFor(req.valid.body.endpoint) });
+  res.json({ status: 'success' });
+});
+
+// Notificación de prueba a los navegadores de quien la pide (sin pasar por la cola)
+notifications.post('/web-push/test', async (req, res) => {
+  const [rows] = await pool.query("SELECT token, subscription FROM push_tokens WHERE user_id = :u AND platform = 'web'", { u: req.auth.userId });
+  if (!rows.length) throw badRequest('Este usuario no tiene notificaciones activadas en ningún navegador');
+  const [[s]] = await pool.query("SELECT COALESCE(language, 'es') AS lang FROM user_settings WHERE user_id = :u", { u: req.auth.userId });
+  const en = s?.lang === 'en';
+  const r = await webpush.sendToSubscriptions(rows, {
+    title: en ? 'Notifications are on' : 'Notificaciones activadas',
+    body: en ? 'This is how BudoDesk will let you know about payments, classes and announcements.' : 'Así te avisará BudoDesk de pagos, clases y anuncios.',
+    url: '/profile', tag: 'test',
+  });
+  res.json({ status: 'success', data: r });
+});
+
 // ===========================================================================
 // Avisos
 // ===========================================================================

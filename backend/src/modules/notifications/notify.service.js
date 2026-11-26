@@ -1,5 +1,5 @@
 /**
- * Notificaciones: bandeja in-app + cola de envío (push con Expo, email).
+ * Notificaciones: bandeja in-app + cola de envío (push con Expo y del navegador, email).
  *
  * notify(dojoId, userIds, { type, title, body, data, pref })
  *   pref = columna de user_settings que la habilita (notify_class_reminders…)
@@ -8,6 +8,7 @@
 const { pool } = require('../../db/pool');
 const { sendMail } = require('../../services/mailer');
 const env = require('../../config/env');
+const webpush = require('./webpush.service');
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const PREFS = new Set(['notify_class_reminders', 'notify_payment_reminders', 'notify_announcements']);
@@ -71,10 +72,24 @@ async function processDeliveries({ limit = 100 } = {}) {
   for (const d of rows) {
     try {
       if (d.channel === 'push') {
-        const [tokens] = await pool.query('SELECT token FROM push_tokens WHERE user_id = :u', { u: d.user_id });
-        const r = await sendPush(tokens.map((t) => t.token), d);
+        const [tokens] = await pool.query('SELECT token, platform, subscription FROM push_tokens WHERE user_id = :u', { u: d.user_id });
+        const web = tokens.filter((t) => t.subscription);
+        const expo = tokens.filter((t) => !t.subscription).map((t) => t.token);
+        if (!web.length && !expo.length) {
+          await pool.query(`UPDATE notification_deliveries SET status = 'skipped', attempts = attempts + 1 WHERE id = :id`, { id: d.id });
+          sent++;
+          continue;
+        }
+        let delivered = false;
+        if (expo.length) { await sendPush(expo, d); delivered = true; }
+        if (web.length) {
+          const w = await webpush.sendToSubscriptions(web, d);
+          // Si ningún navegador lo recibió por un error temporal, se reintenta
+          if (!w.sent && w.failed && !delivered) throw new Error(w.lastError || 'Web push falló');
+          delivered = delivered || w.sent > 0;
+        }
         await pool.query(`UPDATE notification_deliveries SET status = :st, sent_at = NOW(), attempts = attempts + 1 WHERE id = :id`,
-          { st: r.skipped ? 'skipped' : 'sent', id: d.id });
+          { st: delivered ? 'sent' : 'skipped', id: d.id });
       } else {
         const r = await sendMail('notification', { to: d.email, lang: d.lang, vars: { dojo: d.dojo, color: d.color, title: d.title, body: d.body ?? '' } });
         if (r.sent === false) throw new Error(r.error);

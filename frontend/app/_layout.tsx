@@ -8,6 +8,7 @@ import { ZenKakuGothicNew_500Medium, ZenKakuGothicNew_700Bold } from '@expo-goog
 import { SessionProvider, useSession } from '@/session/SessionProvider';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { loadSavedLanguage, useLanguage } from '@/i18n';
+import { registerServiceWorker } from '@/push/webPush';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -30,6 +31,7 @@ export default function RootLayout() {
   const [langLoaded, setLangLoaded] = useState(false);
 
   useEffect(() => { loadSavedLanguage().finally(() => setLangLoaded(true)); }, []);
+  useEffect(() => { registerServiceWorker(); }, []); // web: notificaciones y app instalable
   useEffect(() => { if (fontsLoaded && langLoaded) SplashScreen.hideAsync().catch(() => {}); }, [fontsLoaded, langLoaded]);
 
   if (!fontsLoaded || !langLoaded) return null;
