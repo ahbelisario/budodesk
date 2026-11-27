@@ -173,6 +173,27 @@ const TEMPLATES = [
     }],
   },
   {
+    key: 'aikido-tendoryu', name: 'Aikido', style: 'Tendoryu', org: 'Seikoukan (configuración del dojo)',
+    source: 'Estructura de grados que usa Seikoukan para Aikido Tendoryu',
+    notes: [
+      '10 kyu y 5 dan, con los tiempos y clases mínimas que usa Seikoukan de 6º kyu a 1er dan.',
+      '⚠️ Del 10º al 7º kyu y del 2º dan en adelante no hay tiempos capturados; ajústalos a tu dojo.',
+    ],
+    tracks: [{
+      name: 'General', display_style: 'rank', ranks: [
+        ...[10, 9, 8, 7].map((n) => ({ name: `${['', '1er', '2do', '3er', '4to', '5to', '6to', '7mo', '8vo', '9no', '10mo'][n]} Kyu`, kind: 'kyu', color: C.white })),
+        { name: '6to Kyu', kind: 'kyu', color: C.white, min_months: 3, min_classes: 30 },
+        { name: '5to Kyu', kind: 'kyu', color: C.white, min_months: 3, min_classes: 30 },
+        { name: '4to Kyu', kind: 'kyu', color: C.white, min_months: 7, min_classes: 40 },
+        { name: '3er Kyu', kind: 'kyu', color: C.white, min_months: 4, min_classes: 40 },
+        { name: '2do Kyu', kind: 'kyu', color: C.white, min_months: 6, min_classes: 50 },
+        { name: '1er Kyu', kind: 'kyu', color: C.white, min_months: 6, min_classes: 50 },
+        { name: '1er Dan', kind: 'dan', color: '#000000', min_months: 12, min_classes: 100 },
+        ...['2do', '3er', '4to', '5to'].map((o) => ({ name: `${o} Dan`, kind: 'dan', color: '#000000' })),
+      ],
+    }],
+  },
+  {
     key: 'kyudo-ankf', name: 'Kyudo', style: 'ANKF', org: 'All Nippon Kyudo Federation',
     source: 'Estructura de dan y títulos de la ANKF',
     notes: [
