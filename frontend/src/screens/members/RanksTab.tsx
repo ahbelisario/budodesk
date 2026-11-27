@@ -168,7 +168,7 @@ function History({ items, canFix, onEdit, onAdd }: {
 }
 
 type FixState =
-  | { mode: 'edit'; h: RankEvent; date: string | null; cert: string; notes: string }
+  | { mode: 'edit'; h: RankEvent; rank_id: number | null; date: string | null; cert: string; notes: string }
   | { mode: 'add'; discipline_id: number; rank_id: number | null; date: string | null; cert: string; notes: string };
 
 /** Corregir un registro del historial o agregar un grado anterior (dueño/admin) */
@@ -188,7 +188,7 @@ function FixDialog({ state, setState, userId, structure, disciplines, onDone }: 
     setBusy(true); setErr(null);
     try {
       if (state!.mode === 'edit') {
-        await membersApi.editRankEvent(state!.h.id, { awarded_date: state!.date, certificate_number: state!.cert.trim() || null, notes: state!.notes.trim() || null });
+        await membersApi.editRankEvent(state!.h.id, { ...(state!.h.event_type !== 'stripe' && state!.rank_id && state!.rank_id !== state!.h.rank_id ? { rank_id: state!.rank_id } : {}), awarded_date: state!.date, certificate_number: state!.cert.trim() || null, notes: state!.notes.trim() || null });
       } else {
         await membersApi.addPastRank({ user_id: userId, rank_id: state!.rank_id!, awarded_date: state!.date,
           certificate_number: state!.cert.trim() || null, notes: state!.notes.trim() || null });
@@ -205,7 +205,7 @@ function FixDialog({ state, setState, userId, structure, disciplines, onDone }: 
 
   const discOptions = [...disciplines.map((d) => ({ value: d.discipline_id, label: d.discipline })),
     ...structure.filter((s) => !disciplines.some((d) => d.discipline_id === s.id)).map((s) => ({ value: s.id, label: s.name }))];
-  const dd = state.mode === 'add' ? structure.find((s) => s.id === state.discipline_id) : undefined;
+  const dd = structure.find((s) => s.id === (state.mode === 'add' ? state.discipline_id : state.h.discipline_id));
   const title = state.mode === 'edit' ? mt('hEditTitle', { rank: state.h.rank_name })
     : mt('hAddTitle', { discipline: dd?.name ?? '' });
 
@@ -229,6 +229,8 @@ function FixDialog({ state, setState, userId, structure, disciplines, onDone }: 
             ) : null}
             <Select label={mt('rank')} value={state.rank_id} onChange={(v) => setState({ ...state, rank_id: v })} options={rankOptions(dd)} />
           </>
+        ) : state.h.event_type !== 'stripe' ? (
+          <Select label={mt('rank')} value={state.rank_id} onChange={(v) => setState({ ...state, rank_id: v })} options={rankOptions(dd)} />
         ) : null}
         <DateField label={mt('awardDate')} value={state.date} onChange={(v) => setState({ ...state, date: v })} />
         <Field label={mt('hCert')} value={state.cert} onChangeText={(v) => setState({ ...state, cert: v })} maxLength={50} />
@@ -307,7 +309,7 @@ export function RanksTab({ userId, canEdit, canFix = false, structure, onChanged
         </View>
       ) : null}
       <History items={data.data?.history ?? []} canFix={canFix}
-        onEdit={(h) => { setOk(null); setFix({ mode: 'edit', h, date: h.awarded_date.slice(0, 10), cert: h.certificate_number ?? '', notes: h.notes ?? '' }); }}
+        onEdit={(h) => { setOk(null); setFix({ mode: 'edit', h, rank_id: h.rank_id, date: h.awarded_date.slice(0, 10), cert: h.certificate_number ?? '', notes: h.notes ?? '' }); }}
         onAdd={() => {
           setOk(null);
           const first = disciplines[0]?.discipline_id ?? structure[0]?.id;

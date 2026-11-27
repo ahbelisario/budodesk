@@ -10,7 +10,7 @@ const { auditReq } = require('../../utils/audit');
 const { actingUser } = require('../../utils/acting');
 const { getDojo } = require('../../utils/dojo');
 const { todayIn } = require('../../utils/dates');
-const { memberProgress, applyRankChange, recomputeRankDates } = require('./progress.service');
+const { memberProgress, applyRankChange, ensureCurrentInHistory, syncFromHistory } = require('./progress.service');
 
 const router = express.Router();
 router.use(authenticate, requireDojo);
@@ -100,6 +100,7 @@ router.patch('/history/:id', requireRole('admin'), validate({
   params: z.object({ id }),
   body: z.object({
     awarded_date: date.optional(),
+    rank_id: id.optional(),
     certificate_number: z.string().trim().max(50).nullish(),
     notes: z.string().trim().max(2000).nullish(),
   }).refine((o) => Object.keys(o).length > 0, 'Nada que actualizar'),
@@ -109,28 +110,36 @@ router.patch('/history/:id', requireRole('admin'), validate({
   const out = await req.tdb.transaction(async (t) => {
     const h = await t.one('SELECT * FROM rank_history WHERE dojo_id = :dojoId AND id = :id FOR UPDATE', { id: req.valid.params.id });
     if (!h) throw notFound('Registro no encontrado');
+    if (b.rank_id !== undefined) {
+      const rk = await t.one('SELECT discipline_id FROM ranks WHERE dojo_id = :dojoId AND id = :r', { r: b.rank_id });
+      if (!rk || Number(rk.discipline_id) !== Number(h.discipline_id)) throw badRequest('El grado debe ser de la misma disciplina');
+    }
+    await ensureCurrentInHistory(t, h.user_id, h.discipline_id);
     const sets = [];
+    if (b.rank_id !== undefined) sets.push('rank_id = :rank_id');
     if (b.awarded_date !== undefined) sets.push('awarded_date = :awarded_date');
     if (b.certificate_number !== undefined) sets.push('certificate_number = :certificate_number');
     if (b.notes !== undefined) sets.push('notes = :notes');
     try {
-      await t.query(`UPDATE rank_history SET ${sets.join(', ')} WHERE dojo_id = :dojoId AND id = :id`,
-        { id: h.id, awarded_date: b.awarded_date, certificate_number: b.certificate_number || null, notes: b.notes || null });
+      if (sets.length) {
+        await t.query(`UPDATE rank_history SET ${sets.join(', ')} WHERE dojo_id = :dojoId AND id = :id`,
+          { id: h.id, rank_id: b.rank_id, awarded_date: b.awarded_date, certificate_number: b.certificate_number || null, notes: b.notes || null });
+      }
     } catch (e) {
       if (e.code === 'ER_DUP_ENTRY') throw badRequest('Ese número de certificado ya está en otro registro');
       throw e;
     }
-    await recomputeRankDates(t, h.user_id, h.discipline_id);
+    await syncFromHistory(t, h.user_id, h.discipline_id);
     await auditReq(req, t.executor, {
       action: 'correct', entity: 'rank_history', entityId: h.id,
-      before: { awarded_date: h.awarded_date, certificate_number: h.certificate_number, notes: h.notes }, after: b,
+      before: { rank_id: h.rank_id, event_type: h.event_type, awarded_date: h.awarded_date, certificate_number: h.certificate_number, notes: h.notes }, after: b,
     });
     return h.user_id;
   });
   res.json({ status: 'success', data: { disciplines: await memberProgress(req.tdb, out), history: await history(req.tdb, out) } });
 });
 
-// POST /progress/history — agregar un grado anterior al historial sin cambiar el grado actual
+// POST /progress/history — agregar un registro al historial (el grado actual pasa a ser el más reciente)
 router.post('/history', requireRole('admin'), validate({
   body: z.object({
     user_id: id, rank_id: id, awarded_date: date,
@@ -146,6 +155,7 @@ router.post('/history', requireRole('admin'), validate({
     if (!member) throw notFound('Miembro no encontrado');
     const rank = await t.one('SELECT id, discipline_id FROM ranks WHERE dojo_id = :dojoId AND id = :r', { r: b.rank_id });
     if (!rank) throw badRequest('Grado no válido');
+    await ensureCurrentInHistory(t, b.user_id, rank.discipline_id);
     try {
       const r = await t.query(
         `INSERT INTO rank_history (dojo_id, user_id, discipline_id, rank_id, stripes, event_type, awarded_date, certificate_number, awarded_by, notes)
@@ -157,18 +167,25 @@ router.post('/history', requireRole('admin'), validate({
       if (e.code === 'ER_DUP_ENTRY') throw badRequest('Ese número de certificado ya está en otro registro');
       throw e;
     }
-    await recomputeRankDates(t, b.user_id, rank.discipline_id);
+    await syncFromHistory(t, b.user_id, rank.discipline_id);
   });
   res.status(201).json({ status: 'success', data: { disciplines: await memberProgress(req.tdb, b.user_id), history: await history(req.tdb, b.user_id) } });
 });
 
-// DELETE /progress/history/:id — borrar un registro equivocado (el grado actual no cambia)
+// DELETE /progress/history/:id — borrar un registro equivocado (no se puede borrar el único registro del grado actual)
 router.delete('/history/:id', requireRole('admin'), validate({ params: z.object({ id }) }), async (req, res) => {
   const uid = await req.tdb.transaction(async (t) => {
     const h = await t.one('SELECT * FROM rank_history WHERE dojo_id = :dojoId AND id = :id FOR UPDATE', { id: req.valid.params.id });
     if (!h) throw notFound('Registro no encontrado');
+    const cur = await ensureCurrentInHistory(t, h.user_id, h.discipline_id);
+    if (cur && Number(cur.rank_id) === Number(h.rank_id) && h.event_type !== 'stripe') {
+      const [{ n }] = await t.query(
+        `SELECT COUNT(*) AS n FROM rank_history WHERE dojo_id = :dojoId AND user_id = :u AND discipline_id = :d AND rank_id = :r AND event_type <> 'stripe'`,
+        { u: h.user_id, d: h.discipline_id, r: h.rank_id });
+      if (Number(n) <= 1) throw badRequest('Este registro es el del grado actual. Para corregirlo, edítalo y elige el grado correcto.');
+    }
     await t.query('DELETE FROM rank_history WHERE dojo_id = :dojoId AND id = :id', { id: h.id });
-    await recomputeRankDates(t, h.user_id, h.discipline_id);
+    await syncFromHistory(t, h.user_id, h.discipline_id);
     await auditReq(req, t.executor, { action: 'delete', entity: 'rank_history', entityId: h.id, before: h });
     return h.user_id;
   });

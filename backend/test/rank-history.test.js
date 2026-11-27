@@ -83,3 +83,45 @@ test('validaciones y permisos', async () => {
   const [[a]] = await pool.query("SELECT COUNT(*) AS n FROM audit_log WHERE entity = 'rank_history'");
   assert.ok(a.n >= 4);
 });
+
+// --- Rehacer el historial: grado inicial y los siguientes ---------------------------------------
+const cur = async () => (await pool.query(
+  "SELECT rank_id, DATE_FORMAT(since_date, '%Y-%m-%d') AS s FROM member_ranks WHERE dojo_id = 1 AND user_id = 2 AND discipline_id = 1"))[0][0];
+
+test('sin historial: al agregar un grado aparece también el actual y el más antiguo queda como inicial', async () => {
+  await pool.query('DELETE FROM rank_history WHERE dojo_id = 1 AND user_id = 2'); // el admin borró lo importado
+  const d = ok(await api('post', '/progress/history', T.admin, { user_id: 2, rank_id: R.dan1, awarded_date: '2013-03-01' }), 201);
+  assert.equal(d.history.length, 2, 'se agrega el registro del grado actual para poder editarlo');
+  const byRank = Object.fromEntries(d.history.map((h) => [h.rank_id, h]));
+  assert.equal(byRank[R.dan1].event_type, 'initial');
+  assert.equal(byRank[R.dan3].event_type, 'promotion');
+  assert.equal((await cur()).rank_id, R.dan3, 'el grado actual no baja');
+});
+
+test('cambiar el grado de un registro: el más reciente define el grado actual', async () => {
+  const { history } = ok(await api('get', '/progress/members/2', T.admin));
+  const top = history.find((h) => h.rank_id === R.dan3);
+  ok(await api('patch', `/progress/history/${top.id}`, T.admin, { rank_id: R.dan2, awarded_date: '2018-07-07' }));
+  assert.deepEqual(await cur(), { rank_id: R.dan2, s: '2018-07-07' });
+  // y un registro más reciente lo vuelve a subir
+  ok(await api('post', '/progress/history', T.admin, { user_id: 2, rank_id: R.dan3, awarded_date: '2023-09-15' }), 201);
+  assert.deepEqual(await cur(), { rank_id: R.dan3, s: '2023-09-15' });
+});
+
+test('cambiar cuál es el inicial moviendo fechas', async () => {
+  const { history } = ok(await api('get', '/progress/members/2', T.admin));
+  const dan2 = history.find((h) => h.rank_id === R.dan2);
+  const d = ok(await api('patch', `/progress/history/${dan2.id}`, T.admin, { awarded_date: '2011-01-01' }));
+  const initials = d.history.filter((h) => h.event_type === 'initial');
+  assert.equal(initials.length, 1);
+  assert.equal(initials[0].rank_id, R.dan2);
+});
+
+test('no se borra el único registro del grado actual ni se usa un grado de otra disciplina', async () => {
+  const { history } = ok(await api('get', '/progress/members/2', T.admin));
+  const top = history.find((h) => h.rank_id === R.dan3);
+  assert.equal((await api('delete', `/progress/history/${top.id}`, T.admin)).status, 400);
+  const [[other]] = await pool.query('SELECT id FROM ranks WHERE dojo_id = 1 AND discipline_id <> 1 LIMIT 1');
+  if (other) assert.equal((await api('patch', `/progress/history/${top.id}`, T.admin, { rank_id: other.id })).status, 400);
+  assert.equal((await cur()).rank_id, R.dan3);
+});

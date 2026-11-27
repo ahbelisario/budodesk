@@ -122,4 +122,66 @@ async function recomputeRankDates(t, userId, disciplineId) {
   return row;
 }
 
-module.exports = { memberProgress, applyRankChange, recomputeRankDates };
+/**
+ * Correcciones del historial: si el grado actual no tiene ningún registro (p. ej. el admin borró el
+ * historial importado), se agrega uno con su fecha "desde" para que sea visible y editable.
+ * Se llama ANTES de modificar el historial.
+ */
+async function ensureCurrentInHistory(t, userId, disciplineId) {
+  const cur = await t.one('SELECT rank_id, stripes, since_date FROM member_ranks WHERE dojo_id = :dojoId AND user_id = :u AND discipline_id = :d FOR UPDATE',
+    { u: userId, d: disciplineId });
+  if (!cur) return null;
+  const [{ mine, total }] = await t.query(
+    `SELECT SUM(rank_id = :r AND event_type <> 'stripe') AS mine, COUNT(*) AS total
+       FROM rank_history WHERE dojo_id = :dojoId AND user_id = :u AND discipline_id = :d`,
+    { u: userId, d: disciplineId, r: cur.rank_id });
+  if (Number(mine || 0) > 0) return cur;
+  await t.query(
+    `INSERT INTO rank_history (dojo_id, user_id, discipline_id, rank_id, stripes, event_type, awarded_date)
+     VALUES (:dojoId, :u, :d, :r, :s, :ev, :date)`,
+    { u: userId, d: disciplineId, r: cur.rank_id, s: cur.stripes, ev: Number(total) ? 'promotion' : 'initial', date: cur.since_date });
+  return cur;
+}
+
+/**
+ * Después de corregir el historial: el grado actual es el registro más reciente (sin contar tips),
+ * y las fechas "desde" e "inició la disciplina" salen del historial.
+ */
+async function syncFromHistory(t, userId, disciplineId) {
+  const latest = await t.one(
+    `SELECT rank_id, stripes, awarded_date FROM rank_history
+      WHERE dojo_id = :dojoId AND user_id = :u AND discipline_id = :d AND event_type <> 'stripe'
+      ORDER BY awarded_date DESC, id DESC LIMIT 1`, { u: userId, d: disciplineId });
+  if (!latest) return null;
+  const cur = await t.one('SELECT rank_id FROM member_ranks WHERE dojo_id = :dojoId AND user_id = :u AND discipline_id = :d FOR UPDATE',
+    { u: userId, d: disciplineId });
+  if (!cur) {
+    await t.query(
+      `INSERT INTO member_ranks (dojo_id, user_id, discipline_id, rank_id, stripes, since_date)
+       VALUES (:dojoId, :u, :d, :r, :s, :date)`,
+      { u: userId, d: disciplineId, r: latest.rank_id, s: latest.stripes, date: latest.awarded_date });
+  } else if (Number(cur.rank_id) !== Number(latest.rank_id)) {
+    await t.query('UPDATE member_ranks SET rank_id = :r, stripes = :s WHERE dojo_id = :dojoId AND user_id = :u AND discipline_id = :d',
+      { u: userId, d: disciplineId, r: latest.rank_id, s: latest.stripes });
+  }
+  await relabelInitial(t, userId, disciplineId);
+  return recomputeRankDates(t, userId, disciplineId);
+}
+
+/** El registro más antiguo (sin contar tips) es el grado inicial; los demás "inicial" pasan a promoción */
+async function relabelInitial(t, userId, disciplineId) {
+  const first = await t.one(
+    `SELECT id, event_type FROM rank_history
+      WHERE dojo_id = :dojoId AND user_id = :u AND discipline_id = :d AND event_type <> 'stripe'
+      ORDER BY awarded_date, id LIMIT 1`, { u: userId, d: disciplineId });
+  if (!first) return;
+  await t.query(
+    `UPDATE rank_history SET event_type = 'promotion'
+      WHERE dojo_id = :dojoId AND user_id = :u AND discipline_id = :d AND event_type = 'initial' AND id <> :id`,
+    { u: userId, d: disciplineId, id: first.id });
+  if (first.event_type === 'promotion') {
+    await t.query("UPDATE rank_history SET event_type = 'initial' WHERE dojo_id = :dojoId AND id = :id", { id: first.id });
+  }
+}
+
+module.exports = { memberProgress, applyRankChange, recomputeRankDates, ensureCurrentInHistory, syncFromHistory };
