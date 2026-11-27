@@ -293,3 +293,14 @@ por omisión).
 - `docker compose down -v` en producción: borra el volumen con la base de datos.
 - Subir `.env` a git.
 - Publicar el puerto 3306 en producción.
+
+
+## Plantillas de grados
+
+- Plataforma → **Plantillas**: las plantillas que los dojos ven en Grados → Estructura → «Desde plantilla».
+- Las precargadas vienen en `backend/src/modules/ranks/templates.js` y se copian a la tabla `rank_templates`
+  al arrancar si faltan. Una vez en la tabla, lo que edites en la plataforma no se pisa al actualizar;
+  «Restaurar original» la regresa a lo que trae el código.
+- Las precargadas no se borran: se ocultan con «Visible para los dojos».
+- Como superadmin, en la estructura de cualquier dojo aparece «Guardar como plantilla» en cada disciplina.
+- Cambiar una plantilla no modifica las disciplinas que los dojos ya crearon con ella.

@@ -64,8 +64,17 @@ export type PlatformAlert = {
   resolved_at: string | null; resolved_by: number | null; resolved_by_name: string | null;
 };
 
+import type { RankTemplate } from './ranks';
+
+type TemplateBody = Omit<RankTemplate, 'key' | 'builtin'>;
+
 export const platformApi = {
   plans: () => api.get<SaasPlan[]>('/platform/plans'),
+  rankTemplates: () => api.get<RankTemplate[]>('/platform/rank-templates'),
+  createRankTemplate: (b: TemplateBody) => api.post<RankTemplate>('/platform/rank-templates', b),
+  saveRankTemplate: (key: string, b: Partial<TemplateBody>) => api.put<RankTemplate>(`/platform/rank-templates/${key}`, b),
+  deleteRankTemplate: (key: string) => api.del<{ deleted: boolean }>(`/platform/rank-templates/${key}`),
+  restoreRankTemplate: (key: string) => api.post<RankTemplate>(`/platform/rank-templates/${key}/restore`, {}),
   savePlan: (code: string, b: { name?: string; max_students?: number | null; max_locations?: number | null; finance?: boolean }) =>
     api.put<SaasPlan>(`/platform/plans/${code}`, b),
   monitoring: (status: 'open' | 'resolved' | 'all' = 'all') =>

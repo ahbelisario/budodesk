@@ -19,7 +19,7 @@ const C = {
   silver: '#B8BCC2', gold: '#C9A227', navy: '#23395B',
 };
 
-const ORD = ['', '1er', '2º', '3er', '4º', '5º', '6º', '7º', '8º', '9º', '10º'];
+const ORD = ['', '1er', '2º', '3er', '4º', '5º', '6º', '7º', '8º', '9º', '10º', '11º', '12º', '13º', '14º', '15º'];
 
 /** kyu descendentes: from (p. ej. 6) → 1 */
 function kyus(from, opts = {}) {
@@ -194,6 +194,155 @@ const TEMPLATES = [
     }],
   },
   {
+    key: 'karate-jka', name: 'Karate', style: 'Shotokan (JKA)', org: 'Japan Karate Association (JKA)',
+    source: 'JKA — DAN Ranking (jka.or.jp)',
+    notes: [
+      'Tiempos entre dan de la JKA: 1er dan 1 año tras 1er kyu; 2º 1 año; 3º 2 años (18+); 4º 3; 5º 4; 6º 6; 7º 7 (50+); 8º 7 (60+); 9º 8; 10º 9.',
+      '8º a 10º dan se otorgan por recomendación, sin examen.',
+      '⚠️ La JKA no publica tiempos entre kyu, edad mínima de 1er dan ni colores de cinturón; aquí van los colores más comunes, ajústalos a tu dojo.',
+    ],
+    tracks: [{
+      name: 'Kyu y Dan', display_style: 'belt', ranks: [
+        ...kyus(10, { colors: [C.white, C.yellow, C.orange, C.green, C.blue, C.purple, C.brown, C.brown, C.brown, C.brown] }),
+        ...dans(10, [{ months: 12 }, { months: 12 }, { months: 24, age: 18 }, { months: 36 }, { months: 48 },
+          { months: 72 }, { months: 84, age: 50 }, { months: 84, age: 60 }, { months: 96 }, { months: 108 }])
+          .map((r, i) => (i >= 7 ? { ...r, requires_exam: false } : r)),
+      ],
+    }],
+  },
+  {
+    key: 'karate-wkf', name: 'Karate', style: 'Federación (criterio WKF)', org: 'USA Karate (miembro de la WKF)',
+    source: 'USA Karate — Dan Certification Policies, Procedures and Requirements 2026',
+    notes: [
+      'Sirve para Goju-ryu, Shito-ryu, Wado-ryu y otros estilos que gradúan por federación nacional.',
+      'Edades y tiempos de USA Karate: 1er dan 16+; 2º 2 años y 18+; 3º 3 años y 21+; 4º 4 años y 25+; 5º 5 años y 30+.',
+      '⚠️ Son reglas de la federación de EE. UU.; la de tu país puede variar. 6º dan en adelante y tiempos entre kyu: no verificados.',
+      '⚠️ Colores de kyu: los más comunes; cambian por estilo y escuela.',
+    ],
+    tracks: [{
+      name: 'Kyu y Dan', display_style: 'belt', ranks: [
+        ...kyus(10, { colors: [C.white, C.yellow, C.orange, C.green, C.blue, C.purple, C.brown, C.brown, C.brown, C.brown] }),
+        ...dans(10, [{ age: 16 }, { months: 24, age: 18 }, { months: 36, age: 21 }, { months: 48, age: 25 }, { months: 60, age: 30 }]),
+      ],
+    }],
+  },
+  {
+    key: 'hapkido', name: 'Hapkido', style: null, org: 'International Hapkido Federation (IHF)',
+    source: 'IHF — Time In Rank Requirements (itatkd.com)',
+    notes: [
+      'Tiempos mínimos de la IHF, pensados para alumnos que entrenan 3 días por semana, 1.5 horas por clase.',
+      'Gup: 2 meses de 10º a 6º gup, 3 meses en 5º, 6 meses en 4º, 3º y 2º, 9 meses en 1er gup. Dan: 2, 2, 4, 4, 6, 6 y 8 años.',
+      '⚠️ No hay una federación única de hapkido; otras asociaciones (p. ej. Korea Hapkido Federation) tienen sus propios tiempos. La IHF no publica edades mínimas.',
+    ],
+    tracks: [{
+      name: 'Gup y Dan', display_style: 'belt', ranks: [
+        ...[[10, C.white, null], [9, C.white, C.yellow], [8, C.yellow, null], [7, C.yellow, C.green], [6, C.green, null],
+          [5, C.green, C.blue], [4, C.blue, null], [3, C.blue, C.red], [2, C.red, null], [1, C.red, C.black]]
+          .map(([n, col, st], i) => ({ name: `${ORD[n]} Gup`, short_name: `${n}G`, kind: 'kyu', color: col, stripe_color: st,
+            min_months: [null, 2, 2, 2, 2, 2, 3, 6, 6, 6][i] })),
+        ...dans(9, [{ months: 9 }, { months: 24 }, { months: 24 }, { months: 48 }, { months: 48 }, { months: 72 }, { months: 72 }, { months: 96 }]),
+      ],
+    }],
+  },
+  {
+    key: 'kickboxing-wako', name: 'Kickboxing', style: 'WAKO', org: 'World Association of Kickboxing Organizations (WAKO)',
+    source: 'WAKO Grading Syllabus — International Black Belt Dan certificate (vigente desde 2025)',
+    notes: [
+      'Cinta negra 1er dan: el año en que el alumno cumple 16. Tiempos entre dan: 2, 3, 4, 5, 6 y 7 años (de 1º a 7º).',
+      '8º a 10º dan: los otorga el Consejo de WAKO con un mínimo de 35 años de dedicación al kickboxing.',
+      '⚠️ El documento de WAKO no cubre los kyu: los colores y tiempos de cintas de color los define cada federación nacional. Aquí van los más comunes.',
+    ],
+    tracks: [{
+      name: 'Cintas y Dan', display_style: 'belt', ranks: [
+        ...['Blanca', 'Amarilla', 'Naranja', 'Verde', 'Azul', 'Café'].map((n, i) => ({ name: n, kind: 'belt',
+          color: [C.white, C.yellow, C.orange, C.green, C.blue, C.brown][i] })),
+        ...dans(10, [{ age: 16 }, { months: 24 }, { months: 36 }, { months: 48 }, { months: 60 }, { months: 72 }, { months: 84 }])
+          .map((r, i) => (i >= 7 ? { ...r, requires_exam: false } : r)),
+      ],
+    }],
+  },
+  {
+    key: 'krav-maga-kmg', name: 'Krav Maga', style: 'Niveles P, G y E', org: 'Krav Maga Global (KMG) y otras',
+    source: 'Estructura civil de KMG: Practitioner 1-5, Graduate 1-5, Expert 1-5, Master 1-3',
+    notes: [
+      '18 niveles: Practitioner (P1-P5), Graduate (G1-G5), Expert (E1-E5) y Master (M1-M3).',
+      '⚠️ No encontré los tiempos mínimos oficiales de KMG; quedan vacíos. Como referencia, una fuente de IKMF menciona un mínimo de 3 meses para P1.',
+      'Krav Maga Worldwide usa otro sistema (5 niveles con cintas de color); si es tu caso, ajusta los nombres.',
+    ],
+    tracks: [{
+      name: 'Niveles', display_style: 'rank', ranks: [
+        ...[1, 2, 3, 4, 5].map((n) => ({ name: `Practitioner ${n}`, short_name: `P${n}`, kind: 'other', color: C.yellow })),
+        ...[1, 2, 3, 4, 5].map((n) => ({ name: `Graduate ${n}`, short_name: `G${n}`, kind: 'other', color: C.blue })),
+        ...[1, 2, 3, 4, 5].map((n) => ({ name: `Expert ${n}`, short_name: `E${n}`, kind: 'other', color: C.black })),
+        ...[1, 2, 3].map((n) => ({ name: `Master ${n}`, short_name: `M${n}`, kind: 'other', color: C.red, requires_exam: false })),
+      ],
+    }],
+  },
+  {
+    key: 'capoeira', name: 'Capoeira', style: 'Cordões (bandera de Brasil)', org: 'Federação Paulista de Capoeira (1974)',
+    source: 'Escala de graduación basada en los colores de la bandera de Brasil, establecida en 1974 (Revista Ponto Urbe, USP)',
+    notes: [
+      'Diez cordões con al menos un año en cada etapa: verde; verde y amarillo; amarillo; amarillo y azul; azul; verde, amarillo y azul; blanco y verde; blanco y amarillo; blanco y azul; blanco.',
+      '⚠️ Cada grupo (Abadá, Senzala, Capoeira Brasil…) tiene su propia secuencia de cordas, y muchos grupos de Angola no usan cordas. Ajusta colores y nombres a tu grupo.',
+    ],
+    tracks: [{
+      name: 'Cordões', display_style: 'belt', ranks: [
+        { name: 'Verde', color: C.green }, { name: 'Verde y amarillo', color: C.green, stripe_color: C.yellow },
+        { name: 'Amarillo', color: C.yellow }, { name: 'Amarillo y azul', color: C.yellow, stripe_color: C.blue },
+        { name: 'Azul', color: C.blue }, { name: 'Verde, amarillo y azul', color: C.green, stripe_color: C.blue },
+        { name: 'Blanco y verde', color: C.white, stripe_color: C.green }, { name: 'Blanco y amarillo', color: C.white, stripe_color: C.yellow },
+        { name: 'Blanco y azul', color: C.white, stripe_color: C.blue }, { name: 'Blanco', color: C.white },
+      ].map((r, i) => ({ ...r, kind: 'belt', min_months: i ? 12 : null })),
+    }],
+  },
+  {
+    key: 'muay-thai-kma', name: 'Muay Thai', style: 'Khan (KMA)', org: 'Kru Muaythai Association (KMA)',
+    source: 'Sistema Khan de la Kru Muaythai Association (Tailandia, 2003); colores de mongkol según fuente secundaria',
+    notes: [
+      'El Muay Thai tradicional no usa grados; la KMA creó el sistema Khan (1 a 10) para alumnos, con mongkol de color en lugar de cinturón.',
+      '⚠️ Los colores vienen de una fuente secundaria (solo el rojo de Khan 10 está confirmado en el sitio de la KMA). Sin tiempos mínimos publicados.',
+      'El prajied (brazalete) tradicional no indica grado; si tu gimnasio lo usa como grado, cambia los nombres.',
+    ],
+    tracks: [{
+      name: 'Khan', display_style: 'belt', ranks: [
+        [C.white, null], [C.yellow, null], [C.yellow, C.white], [C.green, null], [C.green, C.white],
+        [C.blue, null], [C.blue, C.white], [C.brown, null], [C.brown, C.white], [C.red, null],
+      ].map(([col, st], i) => ({ name: `Khan ${i + 1}`, short_name: `K${i + 1}`, kind: 'other', color: col, stripe_color: st })),
+    }],
+  },
+  {
+    key: 'ninjutsu-bujinkan', name: 'Ninjutsu', style: 'Bujinkan', org: 'Bujinkan Dojo (Hombu, Noda)',
+    source: 'Estructura de grados de la Bujinkan: mukyu, 9 kyu y 15 dan',
+    notes: [
+      'Mukyu (sin grado) y 9º a 1er kyu; 15 dan. 5º dan requiere la prueba del sakki ante el soke o un representante autorizado.',
+      '⚠️ El color del cinturón no indica el kyu: normalmente solo hay dos colores y el grado se ve en el wappen (parche). Aquí todos los kyu van en verde.',
+      '⚠️ Sin tiempos mínimos publicados.',
+    ],
+    tracks: [{
+      name: 'Kyu y Dan', display_style: 'rank', ranks: [
+        { name: 'Mukyu', short_name: '0K', kind: 'kyu', color: C.white },
+        ...kyus(9, { colors: Array(9).fill(C.green) }),
+        ...dans(15),
+      ],
+    }],
+  },
+  {
+    key: 'kenpo-parker', name: 'Kenpo', style: 'American Kenpo (Ed Parker)', org: 'International Kenpo Karate Association (IKKA) y derivadas',
+    source: 'Orden de cinturones de American Kenpo (Ed Parker)',
+    notes: [
+      'Blanco, amarillo, naranja, morado, azul, verde, café de 3er a 1er grado y negro de 1º a 10º grado.',
+      '⚠️ Cada asociación de kenpo fija sus tiempos y edades; quedan vacíos.',
+    ],
+    tracks: [{
+      name: 'Cintas y Grados', display_style: 'belt', ranks: [
+        ...[['Blanca', C.white], ['Amarilla', C.yellow], ['Naranja', C.orange], ['Morada', C.purple], ['Azul', C.blue], ['Verde', C.green]]
+          .map(([n, col]) => ({ name: n, kind: 'belt', color: col })),
+        ...['3er', '2º', '1er'].map((o) => ({ name: `Café ${o} grado`, kind: 'kyu', color: C.brown })),
+        ...dans(10).map((r, i) => ({ ...r, name: `Negra ${ORD[i + 1]} grado` })),
+      ],
+    }],
+  },
+  {
     key: 'kyudo-ankf', name: 'Kyudo', style: 'ANKF', org: 'All Nippon Kyudo Federation',
     source: 'Estructura de dan y títulos de la ANKF',
     notes: [
@@ -294,4 +443,4 @@ function getTemplate(key) {
   return TEMPLATES.find((t) => t.key === key) || null;
 }
 
-module.exports = { listTemplates, getTemplate };
+module.exports = { listTemplates, getTemplate, BUILTIN_KEYS: TEMPLATES.map((t) => t.key) };

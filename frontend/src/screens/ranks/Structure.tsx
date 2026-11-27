@@ -270,7 +270,8 @@ function RankRow({ r, track, i, count, admin, onEdit, onMove }: {
 }
 
 export function StructureTab() {
-  const { hasRole } = useSession();
+  const { hasRole, user } = useSession();
+  const superadmin = !!user?.is_superadmin;
   const { accent } = useTheme();
   const admin = hasRole('admin');
   const [showInactive, setShowInactive] = useState(false);
@@ -311,6 +312,10 @@ export function StructureTab() {
             {admin ? (
               <View style={{ flexDirection: 'row', gap: space.xs }}>
                 <Button label={t('members.edit')} size="sm" variant="ghost" onPress={() => setDiscDlg({ open: true, d })} />
+                {superadmin ? <Button label={rt('saveAsTemplate')} size="sm" variant="ghost" icon="copy" onPress={async () => {
+                  try { const tp = await ranksApi.saveAsTemplate(d.id, {}); setMsg({ tone: 'success', text: rt('savedAsTemplate', { name: tp.name }) }); }
+                  catch (x) { setMsg({ tone: 'danger', text: errorMessage(x) }); }
+                }} /> : null}
                 <Button label={rt('newTrack')} size="sm" variant="secondary" icon="plus" onPress={() => setTrackDlg({ open: true, disc: d.id, track: null })} />
               </View>
             ) : null}

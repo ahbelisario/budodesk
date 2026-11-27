@@ -4,6 +4,8 @@ export const ranksEs = {
   tab_exams: 'Exámenes', tab_ready: 'Listos para examen', tab_structure: 'Estructura',
 
   // Plantillas
+  saveAsTemplate: 'Guardar como plantilla',
+  savedAsTemplate: 'Se guardó la plantilla «%{name}». La puedes revisar en Plataforma → Plantillas.',
   fromTemplate: 'Desde plantilla',
   tplTitle: 'Agregar disciplina desde plantilla',
   tplIntro: 'Sistemas de grados precargados. Al crearla puedes cambiar todo: nombres, colores, tiempos y edades.',
@@ -148,6 +150,8 @@ export const ranksEn: Shape<typeof ranksEs> = {
   tab_exams: 'Exams', tab_ready: 'Ready for exam', tab_structure: 'Structure',
 
   // Templates
+  saveAsTemplate: 'Save as template',
+  savedAsTemplate: 'Template “%{name}” saved. Review it in Platform → Templates.',
   fromTemplate: 'From template',
   tplTitle: 'Add discipline from template',
   tplIntro: 'Preloaded rank systems. After creating it you can change everything: names, colors, times and ages.',

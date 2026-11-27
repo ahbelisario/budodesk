@@ -47,12 +47,14 @@ export type MyExam = {
 export type TemplateRank = { name: string; short_name: string | null; kind: RankKind; color: string; stripe_color: string | null; max_stripes: number;
   min_months: number | null; min_classes: number | null; min_age: number | null; requires_exam: boolean };
 export type RankTemplate = {
-  key: string; name: string; style: string | null; org: string; source: string; notes: string[];
+  key: string; name: string; style: string | null; org: string | null; source: string | null; notes: string[]; builtin?: boolean; active?: boolean;
   tracks: { name: string; min_age: number | null; max_age: number | null; display_style: DisplayStyle; ranks: TemplateRank[] }[];
 };
 
 export const ranksApi = {
   templates: () => api.get<RankTemplate[]>('/ranks/templates'),
+  saveAsTemplate: (disciplineId: number, b: { name?: string; style?: string | null }) =>
+    api.post<RankTemplate>(`/ranks/disciplines/${disciplineId}/save-as-template`, b),
   applyTemplate: (key: string, b: { name?: string; style?: string | null; discipline_id?: number; tracks?: string[] }) =>
     api.post<{ discipline_id: number; tracks: number; ranks: number }>(`/ranks/templates/${key}/apply`, b),
   structure: (includeInactive = false) => api.get<DisciplineFull[]>('/ranks/structure', includeInactive ? { include_inactive: true } : undefined),

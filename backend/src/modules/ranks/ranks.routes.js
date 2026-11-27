@@ -6,8 +6,8 @@ const express = require('express');
 const { z } = require('zod');
 const { authenticate, requireDojo, requireRole } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validate');
-const { notFound, badRequest, conflict } = require('../../utils/errors');
-const { listTemplates, getTemplate } = require('./templates');
+const { notFound, badRequest, conflict, forbidden } = require('../../utils/errors');
+const templates = require('./templates.service');
 const { auditReq } = require('../../utils/audit');
 const { buildSet } = require('../../utils/sql');
 
@@ -54,8 +54,23 @@ router.get('/structure', validate({ query: z.object({ discipline_id: id.optional
 // ---------------------------------------------------------------------------
 // Plantillas precargadas (kendo, judo, BJJ…): ver templates.js
 // ---------------------------------------------------------------------------
-router.get('/templates', (req, res) => {
-  res.json({ status: 'success', data: listTemplates() });
+router.get('/templates', async (req, res) => {
+  res.json({ status: 'success', data: await templates.list({ activeOnly: true }) });
+});
+
+// Solo el superadmin: guarda la estructura de una disciplina de este dojo como plantilla de la plataforma
+router.post('/disciplines/:id/save-as-template', validate({
+  params: z.object({ id }),
+  body: z.object({ name: z.string().trim().min(1).max(150).optional(), style: z.string().trim().max(150).nullish() }),
+}), async (req, res) => {
+  if (!req.auth.isSuperadmin) throw forbidden('Solo el administrador de la plataforma crea plantillas');
+  const base = await templates.fromDiscipline(req.tdb, req.valid.params.id);
+  const b = req.valid.body;
+  const tpl = await templates.create({
+    ...base, name: b.name ?? base.name, style: b.style === undefined ? base.style : b.style,
+    org: null, source: 'Creada desde la estructura de un dojo', notes: [],
+  }, req.auth.userId);
+  res.status(201).json({ status: 'success', data: tpl });
 });
 
 // Crea una disciplina nueva (o agrega rutas a una existente) a partir de una plantilla.
@@ -69,8 +84,8 @@ router.post('/templates/:key/apply', requireRole('admin'), validate({
     tracks: z.array(z.string().trim().min(1).max(100)).min(1).optional(),
   }),
 }), async (req, res) => {
-  const tpl = getTemplate(req.valid.params.key);
-  if (!tpl) throw notFound('Plantilla no encontrada');
+  const tpl = await templates.get(req.valid.params.key);
+  if (!tpl || !tpl.active) throw notFound('Plantilla no encontrada');
   const b = req.valid.body;
   const tracks = b.tracks ? tpl.tracks.filter((t) => b.tracks.includes(t.name)) : tpl.tracks;
   if (!tracks.length) throw badRequest('Elige al menos un programa de la plantilla');

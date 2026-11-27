@@ -22,10 +22,11 @@ import { dojoHost } from '../../config';
 import { FilterChips } from '../../ui/forms';
 import { MonitoringTab } from './Monitoring';
 import { PlansTab } from './Plans';
+import { RankTemplatesTab } from './RankTemplates';
 
 const pt = (k: string, o?: Record<string, unknown>) => t(`platform.${k}`, o);
 type Msg = { tone: 'success' | 'danger'; text: string } | null;
-type TabKey = 'dojos' | 'signups' | 'plans' | 'monitoring' | 'backups';
+type TabKey = 'dojos' | 'signups' | 'plans' | 'templates' | 'monitoring' | 'backups';
 
 const TIMEZONES = ['America/Mexico_City', 'America/Monterrey', 'America/Chihuahua', 'America/Hermosillo', 'America/Mazatlan', 'America/Tijuana',
   'America/Cancun', 'America/Bogota', 'America/Lima', 'America/Santiago', 'America/Argentina/Buenos_Aires', 'America/New_York',
@@ -812,7 +813,7 @@ function BackupsTab() {
 export function PlatformScreen() {
   useLanguage();
   const params = useLocalSearchParams<{ tab?: string }>();
-  const initial: TabKey = (['backups', 'signups', 'plans', 'monitoring'] as string[]).includes(params.tab ?? '') ? params.tab as TabKey : 'dojos';
+  const initial: TabKey = (['backups', 'signups', 'plans', 'templates', 'monitoring'] as string[]).includes(params.tab ?? '') ? params.tab as TabKey : 'dojos';
   const [tab, setTab] = useState<TabKey>(initial);
   const [pending, setPending] = useState(0);
   const [openAlerts, setOpenAlerts] = useState(0);
@@ -820,7 +821,7 @@ export function PlatformScreen() {
     signupApi.list('pending').then((r) => setPending(r.pending)).catch(() => {});
     platformApi.monitoring('open').then((r) => setOpenAlerts(r.status.open_alerts)).catch(() => {});
   }, []);
-  const tabs = useMemo(() => (['dojos', 'signups', 'plans', 'monitoring', 'backups'] as const).map((k) => ({
+  const tabs = useMemo(() => (['dojos', 'signups', 'plans', 'templates', 'monitoring', 'backups'] as const).map((k) => ({
     key: k, label: pt(`tab_${k}`),
     badge: k === 'signups' && pending ? pending : k === 'monitoring' && openAlerts ? openAlerts : undefined,
   })), [pending, openAlerts]);
@@ -834,6 +835,7 @@ export function PlatformScreen() {
       <View key={tab}>
         {tab === 'dojos' ? <DojosTab /> : tab === 'signups' ? <SignupsTab onPendingChange={setPending} />
           : tab === 'plans' ? <PlansTab />
+          : tab === 'templates' ? <RankTemplatesTab />
           : tab === 'monitoring' ? <MonitoringTab onOpenChange={setOpenAlerts} /> : <BackupsTab />}
       </View>
     </Screen>

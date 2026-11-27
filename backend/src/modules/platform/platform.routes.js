@@ -7,6 +7,11 @@
  *   DELETE /dojos/:id             elimina el dojo y sus datos (solo cancelados; body { confirm_slug })
  *   GET    /plans                 planes de BudoDesk (Básico, Pro) con sus límites
  *   PUT    /plans/:code           nombre y límites de un plan
+ *   GET    /rank-templates        plantillas de grados (todas, también las desactivadas)
+ *   POST   /rank-templates        nueva plantilla
+ *   PUT    /rank-templates/:key   editar (datos, programas y grados, activa)
+ *   DELETE /rank-templates/:key   borrar (solo las creadas aquí; las precargadas se desactivan)
+ *   POST   /rank-templates/:key/restore  volver una precargada a su versión original
  *   GET    /monitoring            ajustes, estado y alertas (?status=open|resolved|all)
  *   PUT    /monitoring/settings   correos de alerta, push, latido, umbral de disco
  *   POST   /monitoring/test       manda una alerta de prueba
@@ -32,6 +37,7 @@ const dojos = require('./dojos.service');
 const backups = require('./backups.service');
 const signups = require('../signup/signup.service');
 const monitor = require('./monitor.service');
+const rankTemplates = require('../ranks/templates.service');
 
 const router = express.Router();
 const id = z.coerce.number().int().positive();
@@ -133,6 +139,37 @@ router.put('/plans/:code', validate({
   await audit(require('../../db/pool').pool, {
     userId: req.auth.userId, action: 'update', entity: 'saas_plan', entityId: req.valid.params.code, ip: req.ip, after: req.valid.body });
   res.json({ status: 'success', data: plan });
+});
+
+// ===========================================================================
+// Plantillas de grados
+// ===========================================================================
+const tplKey = z.object({ key: z.string().trim().min(1).max(60) });
+const auditTpl = (req, action, key, after) => audit(require('../../db/pool').pool, {
+  userId: req.auth.userId, action, entity: 'rank_template', entityId: key, ip: req.ip, after });
+
+router.get('/rank-templates', async (_req, res) => {
+  res.json({ status: 'success', data: await rankTemplates.list() });
+});
+router.post('/rank-templates', async (req, res) => {
+  const tpl = await rankTemplates.create(req.body, req.auth.userId);
+  await auditTpl(req, 'create', tpl.key, { name: tpl.name });
+  res.status(201).json({ status: 'success', data: tpl });
+});
+router.put('/rank-templates/:key', validate({ params: tplKey }), async (req, res) => {
+  const tpl = await rankTemplates.update(req.valid.params.key, req.body, req.auth.userId);
+  await auditTpl(req, 'update', tpl.key, { name: tpl.name, active: tpl.active });
+  res.json({ status: 'success', data: tpl });
+});
+router.delete('/rank-templates/:key', validate({ params: tplKey }), async (req, res) => {
+  await rankTemplates.remove(req.valid.params.key);
+  await auditTpl(req, 'delete', req.valid.params.key);
+  res.json({ status: 'success', data: { deleted: true } });
+});
+router.post('/rank-templates/:key/restore', validate({ params: tplKey }), async (req, res) => {
+  const tpl = await rankTemplates.restore(req.valid.params.key, req.auth.userId);
+  await auditTpl(req, 'restore', tpl.key);
+  res.json({ status: 'success', data: tpl });
 });
 
 // ===========================================================================
