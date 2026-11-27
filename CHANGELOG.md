@@ -7,6 +7,10 @@ Formato: `MAYOR.MENOR.PARCHE`.
 
 Cada versión se crea con `./release.sh` y queda marcada en git como `vX.Y.Z`.
 
+## [1.0.21] - 2026-11-26
+
+- Plantillas de grados precargadas y edad mínima en la elegibilidad
+
 ## [1.0.20] - 2026-11-26
 
 - Grados: corregir el historial (fechas, certificados, grados anteriores)
