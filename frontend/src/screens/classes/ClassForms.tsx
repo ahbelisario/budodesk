@@ -18,14 +18,15 @@ import { DayToggles, ct } from './bits';
 export function useClassOptions(staff = true) {
   const res = useApi(async () => {
     const none = { data: [] as Awaited<ReturnType<typeof membersApi.list>>['data'] };
-    const [structure, instructors, admins, locations] = await Promise.all([
+    const [structure, instructors, admins, owners, locations] = await Promise.all([
       membersApi.structure(),
       staff ? membersApi.list({ role: 'instructor', status: 'active', page_size: 100 }) : none,
       staff ? membersApi.list({ role: 'admin', status: 'active', page_size: 100 }) : none,
+      staff ? membersApi.list({ role: 'owner', status: 'active', page_size: 20 }).catch(() => none) : none,
       staff ? classesApi.locations().catch(() => []) : [],
     ]);
     const people = new Map<number, string>();
-    [...instructors.data, ...admins.data].forEach((m) => people.set(m.id, fullName(m)));
+    [...instructors.data, ...admins.data, ...owners.data].forEach((m) => people.set(m.id, fullName(m)));
     return {
       disciplines: structure.map((d) => ({ value: d.id, label: d.name, color: d.color ?? undefined })),
       instructors: [...people.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label)),

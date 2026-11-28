@@ -5,6 +5,7 @@ const { tenantDb } = require('../../db/tenant');
 const { pool } = require('../../db/pool');
 const { todayIn, addDays, periodEnd } = require('../../utils/dates');
 const { createCharge, round2 } = require('../billing/charges.service');
+const { badRequest, notFound } = require('../../utils/errors');
 
 function discountAmount(price, type, value) {
   if (!type || type === 'none' || !value) return 0;
@@ -51,6 +52,44 @@ async function chargePeriod(t, ms, { start, end, dueDate, lang, createdBy }) {
     if (e.code === 'ER_DUP_ENTRY') return null; // ya existía
     throw e;
   }
+}
+
+/**
+ * Mensualidades adelantadas: los siguientes `count` periodos de una membresía recurrente que todavía
+ * no tienen cargo. Con dryRun solo los calcula (vista previa); si no, crea los cargos.
+ * La facturación diaria no los duplica (llave única membresía + periodo) y avanza el periodo como siempre.
+ */
+async function advancePeriods(t, membershipId, count, { dryRun = false, lang = 'es', createdBy = null } = {}) {
+  const ms = await t.one(
+    `SELECT ms.id, ms.payer_user_id, ms.price, ms.currency, ms.discount_type, ms.discount_value, ms.status,
+            DATE_FORMAT(ms.next_billing_date, '%Y-%m-%d') AS next_billing_date,
+            DATE_FORMAT(ms.end_date, '%Y-%m-%d') AS end_date, ms.cancel_at_period_end, ms.auto_renew,
+            pl.name AS plan_name, pl.billing_type, pl.interval_unit, pl.interval_count
+       FROM memberships ms JOIN plans pl ON pl.dojo_id = ms.dojo_id AND pl.id = ms.plan_id
+      WHERE ms.dojo_id = :dojoId AND ms.id = :id ${dryRun ? '' : 'FOR UPDATE'}`, { id: membershipId });
+  if (!ms) throw notFound('Membresía no encontrada');
+  if (ms.billing_type !== 'recurring' || !ms.next_billing_date) throw badRequest('Solo las membresías recurrentes se pueden adelantar');
+  if (!['active', 'past_due', 'paused', 'pending'].includes(ms.status) || ms.cancel_at_period_end || !ms.auto_renew) {
+    throw badRequest('Esta membresía no se renueva: no hay mensualidades que adelantar');
+  }
+  const out = [];
+  let start = ms.next_billing_date;
+  for (let guard = 0; out.length < count && guard < 36; guard += 1) {
+    if (ms.end_date && start > ms.end_date) break;
+    const end = periodEnd(start, ms.interval_unit, ms.interval_count || 1);
+    const exists = await t.one(
+      `SELECT id FROM charges WHERE dojo_id = :dojoId AND membership_id = :id AND type = 'membership' AND period_start = :s`,
+      { id: ms.id, s: start });
+    if (!exists) {
+      const discount = discountAmount(ms.price, ms.discount_type, ms.discount_value);
+      const item = { period_start: start, period_end: end, description: periodLabel(ms.plan_name, start, end, lang),
+        total: round2(Number(ms.price) - discount), currency: ms.currency };
+      if (!dryRun) item.charge_id = await chargePeriod(t, ms, { start, end, dueDate: start, lang, createdBy });
+      out.push(item);
+    }
+    start = addDays(end, 1);
+  }
+  return { payer_user_id: ms.payer_user_id, periods: out };
 }
 
 /**
@@ -166,4 +205,4 @@ async function runBillingAll(opts) {
   return results;
 }
 
-module.exports = { discountAmount, initialPeriod, chargePeriod, periodLabel, runBillingForDojo, runBillingAll };
+module.exports = { discountAmount, initialPeriod, chargePeriod, periodLabel, advancePeriods, runBillingForDojo, runBillingAll };

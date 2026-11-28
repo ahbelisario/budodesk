@@ -184,6 +184,7 @@ router.delete('/series/:id', requireRole(...MANAGE), validate({ params: z.object
 const SESSION_SELECT = `
   SELECT s.id, s.series_id, s.title, s.discipline_id, d.name AS discipline, COALESCE(cs.color, d.color) AS color,
          s.location_id, l.name AS location, s.instructor_id, CONCAT_WS(' ', ip.first_name, ip.last_name) AS instructor_name,
+         s.taught_by, CONCAT_WS(' ', tp.first_name, tp.last_name) AS taught_by_name,
          s.session_date, s.start_time, s.end_time, s.capacity, s.booked_count, s.status, s.cancel_reason, s.notes, s.is_modified,
          cs.min_age, cs.max_age, cs.description,
          (SELECT COUNT(*) FROM class_bookings w WHERE w.dojo_id = s.dojo_id AND w.session_id = s.id AND w.status = 'waitlisted') AS waitlist_count
@@ -191,7 +192,8 @@ const SESSION_SELECT = `
     LEFT JOIN class_series cs ON cs.dojo_id = s.dojo_id AND cs.id = s.series_id
     LEFT JOIN disciplines d ON d.dojo_id = s.dojo_id AND d.id = s.discipline_id
     LEFT JOIN dojo_locations l ON l.dojo_id = s.dojo_id AND l.id = s.location_id
-    LEFT JOIN user_profiles ip ON ip.user_id = s.instructor_id`;
+    LEFT JOIN user_profiles ip ON ip.user_id = s.instructor_id
+    LEFT JOIN user_profiles tp ON tp.user_id = s.taught_by`;
 
 /**
  * GET /classes/sessions?from&to[&discipline_id&instructor_id&user_id]
@@ -581,6 +583,26 @@ router.post('/sessions/:id/checkin', validate({
 });
 
 // Estadísticas de asistencia de una persona
+// Quién impartió la clase (suplente). user_id = null o el asignado → la dio el instructor asignado.
+router.put('/sessions/:id/taught-by', requireRole(...STAFF), validate({
+  params: z.object({ id }), body: z.object({ user_id: id.nullable() }),
+}), async (req, res) => {
+  const sessionId = req.valid.params.id;
+  let by = req.valid.body.user_id;
+  await req.tdb.transaction(async (t) => {
+    const s = await svc.lockSession(t, sessionId);
+    if (!s) throw notFound('Clase no encontrada');
+    if (s.status === 'cancelled') throw badRequest('La clase está cancelada');
+    if (!hasRole(req, ...MANAGE) && s.instructor_id !== req.auth.userId) throw badRequest('Solo puedes cambiarlo en tus clases');
+    if (by && Number(by) === Number(s.instructor_id)) by = null;
+    await assertInstructor(t, by);
+    await t.query('UPDATE class_sessions SET taught_by = :by WHERE dojo_id = :dojoId AND id = :sessionId', { by, sessionId });
+    await auditReq(req, t.executor, { action: 'taught_by', entity: 'class_session', entityId: sessionId,
+      before: { taught_by: s.taught_by ?? null }, after: { taught_by: by } });
+  });
+  res.json({ status: 'success', data: await req.tdb.one(`${SESSION_SELECT} WHERE s.dojo_id = :dojoId AND s.id = :id`, { id: sessionId }) });
+});
+
 router.get('/attendance/stats', validate({ query: z.object({ user_id: id.optional() }) }), async (req, res) => {
   const uid = await actingUser(req, req.valid.query.user_id, { staffRoles: STAFF });
   const dojo = await getDojo(req);
@@ -613,6 +635,12 @@ router.get('/attendance/stats', validate({ query: z.object({ user_id: id.optiona
        JOIN disciplines d ON d.dojo_id = s.dojo_id AND d.id = s.discipline_id
       WHERE b.dojo_id = :dojoId AND b.user_id = :uid AND b.status = 'attended'
       GROUP BY d.id ORDER BY attended DESC`, { uid });
+  // Clases impartidas (como instructor asignado o suplente); no cuentan para su avance de grado
+  const [taught] = await req.tdb.query(
+    `SELECT COUNT(*) AS total, SUM(s.session_date >= :d30) AS d30, MAX(s.session_date) AS last
+       FROM class_sessions s
+      WHERE s.dojo_id = :dojoId AND s.status <> 'cancelled' AND s.session_date <= :today
+        AND COALESCE(s.taught_by, s.instructor_id) = :uid`, { uid, today, d30: addDays(today, -30) });
   const n = (x) => Number(x ?? 0);
   const att = n(totals.attended_total); const ns = n(totals.no_show_total);
   res.json({
@@ -622,6 +650,7 @@ router.get('/attendance/stats', validate({ query: z.object({ user_id: id.optiona
       no_show_total: ns, late_cancel_total: n(totals.late_cancel_total),
       attendance_rate: att + ns > 0 ? Math.round((att / (att + ns)) * 100) : null,
       last_attended: totals.last_attended, streak_weeks: streak, by_discipline: byDiscipline,
+      taught_total: n(taught.total), taught_30d: n(taught.d30), last_taught: taught.last,
     },
   });
 });

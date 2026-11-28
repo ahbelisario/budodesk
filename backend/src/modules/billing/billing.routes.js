@@ -16,6 +16,7 @@ const { getDojo } = require('../../utils/dojo');
 const { pageParams, pageMeta, likeEscape } = require('../../utils/sql');
 const { todayIn } = require('../../utils/dates');
 const svc = require('./charges.service');
+const { advancePeriods } = require('../memberships/memberships.service');
 
 const id = z.coerce.number().int().positive();
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -250,13 +251,30 @@ payments.post('/', requireRole(...STAFF), validate({
     reference: z.string().trim().max(100).nullish(),
     notes: z.string().trim().max(255).nullish(),
     allocations: z.array(z.object({ charge_id: id, amount: money })).optional(),
-  }),
+    // Mensualidades adelantadas: se crean los cargos de los siguientes periodos y el pago se aplica a ellos primero
+    advance: z.object({ membership_id: id, periods: z.coerce.number().int().min(1).max(12) }).optional(),
+  }).refine((o) => !(o.advance && o.allocations?.length), 'Usa adelantar o aplicar a cargos, no ambos'),
 }), async (req, res) => {
   const b = req.valid.body;
   const dojo = await getDojo(req);
   const paymentId = await req.tdb.transaction(async (t) => {
     const m = await t.one('SELECT 1 AS ok FROM dojo_members WHERE dojo_id = :dojoId AND user_id = :u', { u: b.user_id });
     if (!m) throw badRequest('La persona no es miembro del dojo');
+    if (b.advance) {
+      const adv = await advancePeriods(t, b.advance.membership_id, b.advance.periods, { lang: dojo.language, createdBy: req.auth.userId });
+      if (Number(adv.payer_user_id) !== Number(b.user_id)) throw badRequest('Esa membresía la paga otra persona');
+      if (!adv.periods.length) throw badRequest('No hay mensualidades que adelantar en esa membresía');
+      // El pago va primero a los meses adelantados (aunque haya adeudos anteriores); lo que sobre queda a favor
+      let left = b.amount;
+      b.allocations = [];
+      for (const p of adv.periods) {
+        if (left <= 0 || !p.charge_id) continue;
+        const open = await t.one('SELECT total - amount_paid AS open FROM charges WHERE dojo_id = :dojoId AND id = :id', { id: p.charge_id });
+        const apply = Math.min(left, Number(open.open));
+        if (apply > 0) { b.allocations.push({ charge_id: p.charge_id, amount: Math.round(apply * 100) / 100 }); left -= apply; }
+      }
+      b.advance_periods = adv.periods.map((p) => p.description);
+    }
     const r = await t.query(
       `INSERT INTO payments (dojo_id, user_id, amount, currency, method, status, paid_at, reference, notes, received_by)
        VALUES (:dojoId, :u, :amount, :cur, :method, 'completed', :paidAt, :ref, :notes, :by)`,

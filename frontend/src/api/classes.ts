@@ -25,7 +25,7 @@ export type RosterEntry = {
   rank_name: string | null; rank_color: string | null;
 };
 export type SessionDetail = Omit<Session, 'my_booking' | 'my_waitlist_position' | 'starts_at' | 'ends_at' | 'is_past' | 'can_cancel_free' | 'spots_left'> & {
-  is_modified: number; roster?: RosterEntry[]; checkin_code?: string | null;
+  is_modified: number; roster?: RosterEntry[]; checkin_code?: string | null; taught_by?: number | null; taught_by_name?: string | null;
 };
 export type Location = { id: number; name: string; address: string | null; active: number };
 export type SessionInput = {
@@ -40,6 +40,7 @@ export type ListedSession = Omit<Session, 'my_booking' | 'my_waitlist_position' 
 export type ListMeta = { page: number; page_size: number; total: number; total_pages: number; today: string };
 
 export const classesApi = {
+  setTaughtBy: (sessionId: number, userId: number | null) => api.put<SessionDetail>(`/classes/sessions/${sessionId}/taught-by`, { user_id: userId }),
   /** Listado para el personal, sin límite de fechas (sirve para encontrar una clase movida) */
   sessionsList: (q: { view: ListView; q?: string; discipline_id?: number; include_cancelled?: boolean; page?: number; page_size?: number }) =>
     api.getPage<ListedSession[]>('/classes/sessions/list', q).then((r) => ({ data: r.data, meta: r.meta as ListMeta })),

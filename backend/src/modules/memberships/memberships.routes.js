@@ -323,6 +323,15 @@ router.post('/:id/pauses', requireRole(...STAFF), validate({
   res.status(201).json({ status: 'success', data: await loadMembership(req.tdb, msId) });
 });
 
+// Vista previa de mensualidades adelantadas (Registrar pago → «Adelantar mensualidades»)
+router.get('/:id/advance-preview', requireRole(...STAFF), validate({
+  params: z.object({ id }), query: z.object({ periods: z.coerce.number().int().min(1).max(12).default(1) }),
+}), async (req, res) => {
+  const dojo = await getDojo(req);
+  const r = await svc.advancePeriods(req.tdb, req.valid.params.id, req.valid.query.periods, { dryRun: true, lang: dojo.language });
+  res.json({ status: 'success', data: r });
+});
+
 /**
  * Terminar una pausa antes de tiempo (reanudar hoy) o quitar una pausa futura.
  * Devuelve los días que no se usaron: el periodo y la próxima facturación se recorren hacia atrás.

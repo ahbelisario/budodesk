@@ -2,12 +2,12 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { membersApi, type Charge } from '../../api/members';
+import { membersApi, type Charge, type Membership } from '../../api/members';
 import { useApi } from '../../utils/useApi';
 import { errorMessage } from '../../utils/errors';
 import { Badge, Button, Card, Divider, EmptyState, Field, Loading, Notice, SectionHeader, Text, type Tone } from '../../ui/primitives';
 import { Dialog } from '../../ui/Dialog';
-import { Select } from '../../ui/forms';
+import { Select, SwitchRow } from '../../ui/forms';
 import { palette, space } from '../../theme/tokens';
 import { useIsWide } from '../../navigation/AppShell';
 import { t } from '../../i18n';
@@ -31,8 +31,18 @@ export function PaymentDialog({ visible, userId, name, suggested, onClose, onSav
   const [owed, setOwed] = useState<number | undefined>(suggested);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Mensualidades adelantadas
+  const [advOn, setAdvOn] = useState(false);
+  const [advMs, setAdvMs] = useState<number | null>(null);
+  const [advN, setAdvN] = useState(1);
+  const [renewing, setRenewing] = useState<Membership[]>([]);
+  const [preview, setPreview] = useState<{ description: string; total: number; currency: string }[] | null>(null);
+  const [prevErr, setPrevErr] = useState<string | null>(null);
   React.useEffect(() => {
-    if (visible) { setAmount(suggested ? String(suggested) : ''); setReference(''); setErr(null); setMethod('cash'); setWho(null); setOwed(suggested); }
+    if (visible) {
+      setAmount(suggested ? String(suggested) : ''); setReference(''); setErr(null); setMethod('cash'); setWho(null); setOwed(suggested);
+      setAdvOn(false); setAdvN(1); setPreview(null); setPrevErr(null);
+    }
   }, [visible, suggested]);
 
   async function pick(p: PickedPerson | null) {
@@ -47,12 +57,32 @@ export function PaymentDialog({ visible, userId, name, suggested, onClose, onSav
 
   const target = userId ?? who?.id;
   const n = Number(amount.replace(',', '.'));
+
+  // Membresías recurrentes que paga esta persona (las que se pueden adelantar)
+  React.useEffect(() => {
+    setRenewing([]); setAdvMs(null);
+    if (!visible || !target) return;
+    membersApi.memberships(target).then((list) => {
+      const r = list.filter((m) => m.payer_user_id === target && m.next_billing_date && ['active', 'past_due', 'paused', 'pending'].includes(m.status));
+      setRenewing(r); setAdvMs(r[0]?.id ?? null);
+    }).catch(() => {});
+  }, [visible, target]);
+  React.useEffect(() => {
+    setPreview(null); setPrevErr(null);
+    if (!advOn || !advMs) return;
+    membersApi.advancePreview(advMs, advN).then((r) => {
+      setPreview(r.periods);
+      const sum = r.periods.reduce((s, p) => s + Number(p.total), 0);
+      setAmount(String(Math.round(sum * 100) / 100));
+    }).catch((e) => setPrevErr(errorMessage(e)));
+  }, [advOn, advMs, advN]);
   async function save() {
     if (!target) { setErr(t('billing.pickPersonFirst')); return; }
     if (!(n > 0)) { setErr(mt('required')); return; }
     setSaving(true); setErr(null);
     try {
-      await membersApi.registerPayment({ user_id: target, amount: Math.round(n * 100) / 100, method, reference: reference.trim() || null });
+      await membersApi.registerPayment({ user_id: target, amount: Math.round(n * 100) / 100, method, reference: reference.trim() || null,
+        ...(advOn && advMs ? { advance: { membership_id: advMs, periods: advN } } : {}) });
       onSaved();
     } catch (e) { setErr(errorMessage(e)); } finally { setSaving(false); }
   }
@@ -65,6 +95,32 @@ export function PaymentDialog({ visible, userId, name, suggested, onClose, onSav
       </>}>
       <View style={{ gap: space.md }}>
         {!userId ? <PersonPicker label={t('billing.person')} value={who} onChange={pick} /> : null}
+        {renewing.length ? (
+          <SwitchRow label={mt('advTitle')} hint={mt('advHint')} value={advOn}
+            onChange={(v) => { setAdvOn(v); if (!v) setAmount(owed ? String(owed) : ''); }} />
+        ) : null}
+        {advOn && renewing.length ? (
+          <View style={{ gap: space.sm }}>
+            {renewing.length > 1 ? (
+              <Select label={mt('advMembership')} value={advMs} onChange={setAdvMs}
+                options={renewing.map((m) => ({ value: m.id, label: m.plan_name }))} />
+            ) : null}
+            <Select label={mt('advCount')} value={advN} onChange={(v) => setAdvN(v ?? 1)}
+              options={Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: mt('advMonths', { count: i + 1 }) }))} />
+            {prevErr ? <Notice tone="danger">{prevErr}</Notice> : null}
+            {owed ? <Notice tone="warning">{mt('advOwed', { amount: money(owed) })}</Notice> : null}
+            {preview ? (
+              <View style={{ gap: 4, backgroundColor: palette.sunken, borderRadius: 10, padding: space.sm }}>
+                {preview.map((p) => (
+                  <View key={p.description} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.sm }}>
+                    <Text variant="small" style={{ flex: 1 }}>{p.description}</Text>
+                    <Text variant="smallStrong">{money(p.total, p.currency)}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
         <Field label={mt('amount')} value={amount} onChangeText={(v) => setAmount(v.replace(/[^\d.,]/g, ''))} keyboardType="decimal-pad"
           hint={owed ? `${mt('balance')}: ${money(owed)}` : undefined} />
         <Select label={mt('method')} value={method} onChange={(v) => v && setMethod(v)}

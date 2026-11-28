@@ -99,6 +99,11 @@ function SummaryTab({ m, financial, go }: { m: Member; financial: boolean; go: (
               {[att.data.streak_weeks ? mt('streak', { count: att.data.streak_weeks }) : mt('noStreak'),
                 att.data.last_attended ? mt('lastClass', { date: dayShort(att.data.last_attended) }) : mt('neverAttended')].join(' · ')}
             </Text>
+            {att.data.taught_total ? (
+              <Text variant="small" color={palette.ink2}>
+                {[mt('taught30', { count: att.data.taught_30d }), att.data.last_taught ? mt('lastTaught', { date: dayShort(att.data.last_taught) }) : null].filter(Boolean).join(' · ')}
+              </Text>
+            ) : null}
           </>
         ) : null}
       </Card>
@@ -131,6 +136,7 @@ function AttendanceTab({ userId }: { userId: number }) {
   const tiles: [string, string][] = [
     [mt('attended30'), String(s.attended_30d)], [mt('attended90'), String(s.attended_90d)],
     [mt('attendedTotal'), String(s.attended_total)], [mt('attendanceRate'), s.attendance_rate != null ? `${s.attendance_rate}%` : '—'],
+    ...(s.taught_total ? [[mt('taughtTotal'), String(s.taught_total)] as [string, string], [mt('taught30Tile'), String(s.taught_30d)] as [string, string]] : []),
   ];
   const tone = { attended: 'success', no_show: 'danger', late_cancel: 'warning' } as const;
   return (

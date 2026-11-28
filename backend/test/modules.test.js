@@ -362,6 +362,43 @@ describe('membresías y facturación', () => {
     assert.equal(Number(ok(await api('get', `/charges/mine?user_id=${ids.mama}`, T.admin)).summary.credit), startCredit);
   });
 
+  test('adelantar mensualidades: crea los cargos de los siguientes meses, el pago va a ellos y la facturación no los duplica', async () => {
+    const msId = ids.msAlumno;
+    const ms = ok(await api('get', `/memberships/${msId}`, T.admin));
+    const prev = ok(await api('get', `/memberships/${msId}/advance-preview?periods=2`, T.admin));
+    assert.equal(prev.periods.length, 2);
+    assert.equal(prev.periods[0].period_start, ms.next_billing_date);
+    assert.equal(prev.periods[0].total, 600);
+    assert.ok(!prev.periods[0].charge_id, 'la vista previa no crea nada');
+
+    const bad = await api('post', '/payments', T.admin, { user_id: ids.mama, amount: 600, method: 'cash', advance: { membership_id: msId, periods: 1 } });
+    assert.equal(bad.status, 400, 'la membresía la paga otra persona');
+
+    const p = ok(await api('post', '/payments', T.admin, { user_id: 2, amount: 1200, method: 'cash', reference: 'ADELANTO', advance: { membership_id: msId, periods: 2 } }), 201);
+    const [rows] = await pool.query(
+      "SELECT c.description, c.status, DATE_FORMAT(c.period_start, '%Y-%m-%d') AS ps FROM charges c JOIN payment_allocations a ON a.charge_id = c.id WHERE a.payment_id = ? ORDER BY c.period_start",
+      [p.id]);
+    assert.deepEqual(rows.map((r) => [r.ps, r.status]), prev.periods.map((x) => [x.period_start, 'paid']));
+    assert.equal(rows[0].description, prev.periods[0].description);
+
+    // la siguiente vista previa empieza después de los meses ya adelantados
+    const next = ok(await api('get', `/memberships/${msId}/advance-preview?periods=1`, T.admin));
+    assert.ok(next.periods[0].period_start > prev.periods[1].period_start);
+
+    // la facturación usa el mismo cargo (llave única membresía + periodo): el mismo periodo no se puede crear dos veces
+    const svc = require('../src/modules/memberships/memberships.service');
+    const { tenantDb } = require('../src/db/tenant');
+    const again = await tenantDb(1).transaction((t) => svc.chargePeriod(t, { ...ms, id: msId, payer_user_id: 2, plan_name: 'X', price: 600, currency: 'MXN' },
+      { start: prev.periods[0].period_start, end: prev.periods[0].period_end }));
+    assert.equal(again, null);
+
+    // Limpieza para el tablero
+    ok(await api('post', `/payments/${p.id}/cancel`, T.admin, { reason: 'prueba' }));
+    for (const x of rows.length ? (await pool.query('SELECT id FROM charges WHERE membership_id = ? AND period_start IN (?, ?)', [msId, prev.periods[0].period_start, prev.periods[1].period_start]))[0] : []) {
+      ok(await api('post', `/charges/${x.id}/void`, T.admin, { reason: 'limpieza' }));
+    }
+  });
+
   test('reactivar un cargo anulado: vuelve a pendiente y se le aplica el saldo a favor', async () => {
     const ch = ok(await api('post', '/charges', T.admin, { user_id: ids.mama, type: 'membership', description: 'Mensualidad nov', amount: 400 }), 201);
     ok(await api('post', `/charges/${ch.id}/void`, T.admin, { reason: 'baja' }));
@@ -539,6 +576,34 @@ describe('clases y reservas', () => {
     const detail = ok(await api('get', `/classes/sessions/${kids[0].id}`, T.admin));
     assert.equal(detail.min_age, 5);
     assert.ok('checkin_code' in detail);
+  });
+
+  test('quién impartió la clase: suplente, ficha del instructor y reporte; no cuenta como asistencia', async () => {
+    const sensei = (await pool.query("SELECT id FROM users WHERE email = 'sensei@ambos.mx'"))[0][0].id;
+    const s = ok(await api('post', '/classes/sessions', T.admin, {
+      title: 'Clase de prueba', instructor_id: sensei, session_date: today(-2), start_time: '07:00', end_time: '08:00' }), 201);
+    const stats = async (uid) => ok(await api('get', `/attendance/stats?user_id=${uid}`.replace('/attendance', '/classes/attendance'), T.admin));
+    const before1 = await stats(1);
+    const beforeS = await stats(sensei);
+
+    // por omisión la dio el asignado
+    assert.equal((await stats(sensei)).taught_total, beforeS.taught_total);
+    // el alumno no puede cambiarlo; el instructor asignado sí
+    assert.equal((await api('put', `/classes/sessions/${s.id}/taught-by`, T.student, { user_id: 1 })).status, 403);
+    const r = ok(await api('put', `/classes/sessions/${s.id}/taught-by`, T.instructor, { user_id: 1 }));
+    assert.equal(r.taught_by, 1);
+    assert.ok(r.taught_by_name);
+    assert.equal((await stats(1)).taught_total, before1.taught_total + 1);
+    assert.equal((await stats(sensei)).taught_total, beforeS.taught_total - 1);
+    assert.equal((await stats(1)).attended_total, before1.attended_total, 'dar clase no es asistencia');
+
+    const rep = ok(await api('get', `/reports/attendance?from=${today(-7)}&to=${today()}`, T.admin));
+    const owner = rep.instructors.find((x) => x.user_id === 1);
+    assert.ok(owner && owner.as_substitute >= 1);
+
+    // un alumno no puede ser suplente; volver al asignado limpia el campo
+    assert.equal((await api('put', `/classes/sessions/${s.id}/taught-by`, T.admin, { user_id: 2 })).status, 400);
+    assert.equal(ok(await api('put', `/classes/sessions/${s.id}/taught-by`, T.admin, { user_id: sensei })).taught_by, null);
   });
 });
 

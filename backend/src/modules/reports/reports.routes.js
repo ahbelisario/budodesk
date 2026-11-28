@@ -226,6 +226,17 @@ router.get('/attendance', STAFF, validate({ query: z.object({ from: ymd.optional
         AND EXISTS (SELECT 1 FROM dojo_member_roles r WHERE r.dojo_id = m.dojo_id AND r.user_id = m.user_id AND r.role = 'student')
       GROUP BY m.user_id, name, m.status
       ORDER BY attended DESC, name`, p);
+  // Clases impartidas por instructor (quien la dio: suplente o el asignado)
+  const instructors = await tdb.query(
+    `SELECT x.uid AS user_id, CONCAT_WS(' ', p.first_name, p.last_name) AS name, COUNT(*) AS sessions,
+            SUM(x.sub) AS as_substitute, COALESCE(SUM(x.att), 0) AS attended
+       FROM (SELECT COALESCE(s.taught_by, s.instructor_id) AS uid, s.taught_by IS NOT NULL AS sub,
+                    (SELECT COUNT(*) FROM class_bookings b WHERE b.dojo_id = s.dojo_id AND b.session_id = s.id AND b.status = 'attended') AS att
+               FROM class_sessions s
+              WHERE s.dojo_id = :dojoId AND s.status <> 'cancelled' AND s.session_date BETWEEN :from AND :to
+                AND COALESCE(s.taught_by, s.instructor_id) IS NOT NULL) x
+       JOIN user_profiles p ON p.user_id = x.uid
+      GROUP BY x.uid, name ORDER BY sessions DESC, name`, p);
   const num = (rows, ks) => rows.map((r) => ({ ...r, ...Object.fromEntries(ks.map((k) => [k, Number(r[k] || 0)])) }));
   const cls = num(classes, ['sessions', 'attended', 'no_show']).map((c) => ({ ...c, avg: c.sessions ? r2(c.attended / c.sessions) : 0 }));
   const st = num(students, ['attended', 'no_show']);
@@ -235,6 +246,7 @@ router.get('/attendance', STAFF, validate({ query: z.object({ from: ymd.optional
     status: 'success',
     data: {
       from, to: p.to, classes: cls, students: st,
+      instructors: num(instructors, ['sessions', 'as_substitute', 'attended']),
       totals: { sessions, attended, avg: sessions ? r2(attended / sessions) : 0, students_without: st.filter((s) => s.attended === 0).length },
     },
   });

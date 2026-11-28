@@ -20,7 +20,8 @@ import { t, useLanguage } from '../../i18n';
 import { dateTimeShort, dayLong, fullName, hm } from '../../utils/format';
 import { ViewAs } from '../StudentHome';
 import { PersonPicker, type PickedPerson } from '../members/PersonPicker';
-import { SessionDialog } from './ClassForms';
+import { SessionDialog, useClassOptions } from './ClassForms';
+import { Select } from '../../ui/forms';
 import { BookButton, useBooking } from './Schedule';
 import { ageLabel, ct, myBookingBadge, spotsLabel, statusBadge } from './bits';
 
@@ -36,7 +37,7 @@ function InfoRow({ icon, children }: { icon: React.ComponentProps<typeof Icon>['
   );
 }
 
-function Header({ s }: { s: Pick<Detail, 'title' | 'session_date' | 'start_time' | 'end_time' | 'discipline' | 'instructor_name' | 'location' | 'color' | 'status' | 'cancel_reason' | 'min_age' | 'max_age' | 'description'> & { is_past?: boolean } }) {
+function Header({ s }: { s: Pick<Detail, 'title' | 'session_date' | 'start_time' | 'end_time' | 'discipline' | 'instructor_name' | 'taught_by_name' | 'location' | 'color' | 'status' | 'cancel_reason' | 'min_age' | 'max_age' | 'description'> & { is_past?: boolean } }) {
   const { accent } = useTheme();
   const st = statusBadge({ status: s.status, is_past: !!s.is_past });
   const ages = ageLabel(s.min_age, s.max_age);
@@ -49,7 +50,8 @@ function Header({ s }: { s: Pick<Detail, 'title' | 'session_date' | 'start_time'
       </View>
       <InfoRow icon="calendar">{dayLong(s.session_date)} · {hm(s.start_time)} – {hm(s.end_time)}</InfoRow>
       {s.discipline ? <InfoRow icon="award">{s.discipline}</InfoRow> : null}
-      {s.instructor_name ? <InfoRow icon="user">{s.instructor_name}</InfoRow> : null}
+      {s.taught_by_name ? <InfoRow icon="user">{ct('taughtBySubShort', { name: s.taught_by_name, assigned: s.instructor_name ?? '—' })}</InfoRow>
+        : s.instructor_name ? <InfoRow icon="user">{s.instructor_name}</InfoRow> : null}
       {s.location ? <InfoRow icon="map-pin">{s.location}</InfoRow> : null}
       {s.description ? <Text variant="small" color={palette.ink2}>{s.description}</Text> : null}
       {s.status === 'cancelled' && s.cancel_reason ? <Notice tone="danger">{ct('cancelledBecause', { reason: s.cancel_reason })}</Notice> : null}
@@ -242,6 +244,30 @@ function Notes({ s, onSaved }: { s: Detail; onSaved: (d: Detail) => void }) {
 }
 
 // ---------------------------------------------------------------------------
+/** Quién dio la clase (si no fue el asignado, el suplente). No cuenta como asistencia del instructor. */
+function TaughtBy({ s, onSaved }: { s: Detail; onSaved: (d: Detail) => void }) {
+  const opts = useClassOptions(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const current = s.taught_by ?? s.instructor_id ?? null;
+  async function change(v: number | null) {
+    if (v === current) return;
+    setBusy(true); setErr(null);
+    try { onSaved(await classesApi.setTaughtBy(s.id, v)); } catch (e) { setErr(errorMessage(e)); } finally { setBusy(false); }
+  }
+  return (
+    <Card style={{ gap: space.sm }}>
+      <SectionHeader title={ct('taughtBy')} />
+      <Select label={ct('taughtByLabel')} value={current} onChange={change} disabled={busy}
+        options={opts.instructors} placeholder={ct('taughtByNone')} />
+      <Text variant="small" color={palette.ink2}>
+        {s.taught_by && s.instructor_name ? ct('taughtBySub', { name: s.instructor_name }) : ct('taughtByHint')}
+      </Text>
+      {err ? <Notice tone="danger">{err}</Notice> : null}
+    </Card>
+  );
+}
+
 function StaffView({ id }: { id: number }) {
   const wide = useIsWide();
   const { hasRole, user } = useSession();
@@ -287,6 +313,7 @@ function StaffView({ id }: { id: number }) {
         </View>
         <View style={{ flex: wide ? 1 : undefined, alignSelf: 'stretch', gap: space.lg }}>
           {s.status === 'scheduled' ? <CheckinCode s={s} onChanged={(code) => data.setData({ ...s, checkin_code: code })} /> : null}
+          {canNotes && s.status !== 'cancelled' ? <TaughtBy s={s} onSaved={(d) => data.setData({ ...s, taught_by: d.taught_by, taught_by_name: d.taught_by_name })} /> : null}
           {canNotes ? <Notes s={s} onSaved={(d) => data.setData({ ...s, notes: d.notes })} /> : null}
         </View>
       </View>

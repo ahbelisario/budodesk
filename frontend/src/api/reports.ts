@@ -48,6 +48,7 @@ export type AttendanceReport = {
   classes: { k: string; title: string; discipline: string | null; sessions: number; attended: number; no_show: number; avg: number }[];
   students: { user_id: number; name: string; attended: number; no_show: number; last_attended: string | null }[];
   totals: { sessions: number; attended: number; avg: number; students_without: number };
+  instructors?: { user_id: number; name: string; sessions: number; as_substitute: number; attended: number }[];
 };
 export type RanksReport = {
   from: string; to: string;

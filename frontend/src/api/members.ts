@@ -113,7 +113,8 @@ export type Membership = {
 };
 export type AttendanceStats = {
   attended_total: number; attended_30d: number; attended_90d: number; no_show_total: number; late_cancel_total: number;
-  attendance_rate: number | null; last_attended: string | null; streak_weeks: number; by_discipline: { discipline_id: number; discipline: string; attended: number }[];
+  attendance_rate: number | null; last_attended: string | null; streak_weeks: number;
+  taught_total?: number; taught_30d?: number; last_taught?: string | null; by_discipline: { discipline_id: number; discipline: string; attended: number }[];
 };
 export type BookingRow = { booking_id: number; status: string; session_id: number; title: string; session_date: string; start_time: string; discipline: string | null; color: string | null; instructor_name: string | null };
 
@@ -150,7 +151,11 @@ export const membersApi = {
   memberships: (id: number) => api.get<Membership[]>('/memberships/mine', { user_id: id }),
   charges: (id: number) => api.get<Charge[]>('/charges', { user_id: id, status: 'all', page_size: 50 }),
   payments: (id: number) => api.get<Payment[]>('/payments', { user_id: id, status: 'all', page_size: 50 }),
-  registerPayment: (body: { user_id: number; amount: number; method: 'cash' | 'transfer' | 'card' | 'other'; reference?: string | null; notes?: string | null }) => api.post<Payment>('/payments', body),
+  registerPayment: (body: { user_id: number; amount: number; method: 'cash' | 'transfer' | 'card' | 'other'; reference?: string | null; notes?: string | null;
+    advance?: { membership_id: number; periods: number } }) => api.post<Payment>('/payments', body),
+  advancePreview: (membershipId: number, periods: number) =>
+    api.get<{ payer_user_id: number; periods: { period_start: string; period_end: string; description: string; total: number; currency: string }[] }>(
+      `/memberships/${membershipId}/advance-preview`, { periods }),
   attendance: (id: number) => api.get<AttendanceStats>('/classes/attendance/stats', { user_id: id }),
   pastBookings: (id: number) => api.get<BookingRow[]>('/classes/bookings/mine', { user_id: id, scope: 'past', limit: 30 }),
 };

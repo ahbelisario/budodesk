@@ -76,6 +76,30 @@ export function AttendanceTab() {
             <Tile label={rt('avgPerClass')} value={String(r.totals.avg)} />
             <Tile label={rt('withoutAttendance')} value={String(r.totals.students_without)} tone={r.totals.students_without ? palette.warning : undefined} />
           </Card>
+          {r.instructors?.length ? (
+            <Card style={{ gap: space.xs }}>
+              <Text variant="bodyStrong">{rt('byInstructor')}</Text>
+              <Text variant="small" color={palette.ink2}>{rt('byInstructorHint')}</Text>
+              {r.instructors.map((x, i) => (
+                <View key={x.user_id}>
+                  {i > 0 ? <Divider /> : null}
+                  <Pressable accessibilityRole="link" onPress={() => router.push(`/members/${x.user_id}` as never)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: space.xs }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text variant="bodyStrong" numberOfLines={1}>{x.name}</Text>
+                      <Text variant="caption" color={palette.ink2}>
+                        {[rt('studentsTaught', { count: x.attended }), x.as_substitute ? rt('asSubstitute', { count: x.as_substitute }) : null].filter(Boolean).join(' · ')}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text variant="bodyStrong">{x.sessions}</Text>
+                      <Text variant="caption" color={palette.ink2}>{rt('classesTaught', { count: x.sessions })}</Text>
+                    </View>
+                  </Pressable>
+                </View>
+              ))}
+            </Card>
+          ) : null}
           <View style={{ flexDirection: wide ? 'row' : 'column', gap: space.md, alignItems: 'flex-start' }}>
             <Card style={{ flex: 1, alignSelf: 'stretch', gap: space.xs }}>
               <Text variant="bodyStrong">{rt('byClass')}</Text>
