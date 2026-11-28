@@ -99,6 +99,8 @@ export const dojoEs = {
   activity: 'Actividad reciente',
   activityHint: 'Cambios importantes hechos por el personal del dojo.',
   noActivity: 'Sin actividad registrada.',
+  impStart: 'empezó a ver la app como %{name} (soporte, solo lectura)',
+  impEnd: 'terminó de ver la app como %{name}',
   platformEntry: 'Plataforma',
   save: 'Guardar cambios',
 };
@@ -202,6 +204,8 @@ export const dojoEn: Shape<typeof dojoEs> = {
   activity: 'Recent activity',
   activityHint: 'Important changes made by dojo staff.',
   noActivity: 'No activity recorded.',
+  impStart: 'started viewing the app as %{name} (support, read-only)',
+  impEnd: 'stopped viewing the app as %{name}',
   platformEntry: 'Platform',
   save: 'Save changes',
 };

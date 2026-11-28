@@ -365,7 +365,10 @@ function ActivityTab() {
           <View style={{ paddingVertical: space.xs, gap: 2 }}>
             <Text variant="body">
               {r.platform ? <Text variant="smallStrong" color={palette.ink2}>{`${dt('platformEntry')} · `}</Text> : null}
-              <Text variant="bodyStrong">{r.user_name ?? (r.platform ? 'BudoDesk' : '—')}</Text> · {r.action} · {r.entity}{r.entity_id ? ` #${r.entity_id}` : ''}
+              <Text variant="bodyStrong">{r.user_name ?? (r.platform ? 'BudoDesk' : '—')}</Text>
+              {r.action.startsWith('impersonate_')
+                ? ` · ${dt(r.action === 'impersonate_start' ? 'impStart' : 'impEnd', { name: (r.after_data as { name?: string } | null)?.name ?? `#${r.entity_id}` })}`
+                : ` · ${r.action} · ${r.entity}${r.entity_id ? ` #${r.entity_id}` : ''}`}
             </Text>
             <Text variant="caption" color={palette.ink2}>{dateTimeShort(r.created_at)}</Text>
           </View>

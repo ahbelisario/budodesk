@@ -32,6 +32,7 @@ function expandRoles(roles) {
  *
  * Deja en req.auth: { userId, sessionId, dojoId, roles, isSuperadmin, support }
  * support = superadmin dentro de un dojo del que no es miembro (permisos de dueño).
+ * impersonatedBy = id de quien está usando "ver como" (soporte); en ese caso todo es solo lectura.
  */
 async function authenticate(req, _res, next) {
   const header = req.headers.authorization || '';
@@ -48,17 +49,27 @@ async function authenticate(req, _res, next) {
     ));
   }
 
+  // "Ver como": la sesión que se valida es la de quien pidió el token, no la del usuario visto
+  const imp = claims.impersonatedBy;
   const session = await one(pool,
     `SELECT u.status, u.is_superadmin, u.deleted_at, s.revoked_at, (s.expires_at < NOW()) AS expired
        FROM auth_sessions s JOIN users u ON u.id = s.user_id
       WHERE s.id = :sid AND s.user_id = :uid`,
-    { sid: claims.sessionId, uid: claims.userId });
+    { sid: claims.sessionId, uid: imp ?? claims.userId });
 
   if (!session || session.revoked_at || session.expired) {
     return next(unauthorized('La sesión ya no es válida', 'SESSION_REVOKED'));
   }
   if (session.status !== 'active' || session.deleted_at) {
     return next(unauthorized('Cuenta desactivada', 'ACCOUNT_DISABLED'));
+  }
+  if (imp) {
+    if (!claims.dojoId) return next(unauthorized('Token inválido', 'TOKEN_INVALID'));
+    const target = await one(pool, 'SELECT status, deleted_at FROM users WHERE id = :uid', { uid: claims.userId });
+    if (!target || target.status !== 'active' || target.deleted_at) {
+      return next(unauthorized('Cuenta desactivada', 'ACCOUNT_DISABLED'));
+    }
+    session.is_superadmin = 0; // se ve exactamente lo que ve el usuario
   }
 
   let roles = [];
@@ -93,7 +104,17 @@ async function authenticate(req, _res, next) {
     isSuperadmin: !!session.is_superadmin,
     support,
     readOnly,
+    impersonatedBy: imp,
   };
+
+  if (imp) {
+    const path = req.originalUrl.split('?')[0];
+    if (!SAFE_METHODS.has(req.method) && path !== '/api/v2/impersonation/end') {
+      return next(new AppError(403, 'IMPERSONATION_READ_ONLY',
+        'Estás viendo la cuenta de otra persona en modo solo lectura: no se pueden hacer cambios.'));
+    }
+    return next(); // no cuenta como actividad del usuario
+  }
 
   if (readOnly && !SAFE_METHODS.has(req.method) && !allowedInReadOnly(req.originalUrl)) {
     return next(new AppError(403, 'DOJO_READ_ONLY',

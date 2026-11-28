@@ -42,6 +42,8 @@ export type AuthPayload = {
   user?: User;
   dojo: DojoSummary | null;
   dojos?: DojoSummary[];
+  /** "Ver como" (soporte): presente solo mientras se ve la cuenta de otra persona */
+  impersonation?: { user_id: number; name: string; expires_at: string };
 };
 
 export type PublicDojo = {

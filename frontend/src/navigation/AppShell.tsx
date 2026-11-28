@@ -141,6 +141,34 @@ function TabBar() {
   );
 }
 
+/** Aviso fijo mientras se ve la app como otra persona ("ver como", solo lectura) */
+function ImpersonationBanner() {
+  const { impersonation, endImpersonation } = useSession();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [busy, setBusy] = React.useState(false);
+  if (!impersonation) return null;
+  async function exit() {
+    const back = `/members/${impersonation!.user_id}`;
+    setBusy(true);
+    try { await endImpersonation(); router.replace(back as never); } finally { setBusy(false); }
+  }
+  const until = new Date(impersonation.expires_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return (
+    <View accessibilityRole="alert" style={{
+      flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap',
+      backgroundColor: '#5B2A86', paddingHorizontal: space.lg, paddingVertical: space.sm, paddingTop: space.sm + insets.top,
+    }}>
+      <Icon name="eye" size={16} color="#FFFFFF" />
+      <Text variant="small" color="#FFFFFF" style={{ flex: 1, minWidth: 180 }}>{t('members.impBanner', { name: impersonation.name, time: until })}</Text>
+      <Pressable accessibilityRole="button" onPress={exit} disabled={busy} hitSlop={6}
+        style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: '#FFFFFF' }}>
+        <Text variant="smallStrong" color="#5B2A86">{t('members.impExit')}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 /** Aviso fijo arriba cuando el superadmin está dentro de un dojo en modo soporte */
 function SupportBanner() {
   const { dojo, dojos, switchDojo } = useSession();
@@ -180,6 +208,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <View style={{ flex: 1, flexDirection: 'row', backgroundColor: palette.paper }}>
         <Sidebar />
         <View style={{ flex: 1 }}>
+          <ImpersonationBanner />
           <SupportBanner />
           <TrialBanner />
           {children}
@@ -189,6 +218,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
   return (
     <View style={{ flex: 1, backgroundColor: palette.paper }}>
+      <ImpersonationBanner />
       <SupportBanner />
       <TrialBanner topInset={!dojo?.support} />
       <View style={{ flex: 1 }}>{children}</View>

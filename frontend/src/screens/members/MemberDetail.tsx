@@ -339,7 +339,7 @@ export function MemberDetail() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string; tab?: string; created?: string }>();
   const id = Number(params.id);
-  const { hasRole, user } = useSession();
+  const { hasRole, user, startImpersonation } = useSession();
   const wide = useIsWide();
   const isAdmin = hasRole('admin');
   const isStaff = hasRole('admin', 'staff');
@@ -415,6 +415,12 @@ export function MemberDetail() {
         <View style={{ flexDirection: 'row', gap: space.xs, flexWrap: 'wrap' }}>
           {m.status === 'pending' ? <Button label={mt('approve')} icon="check" loading={busy === 'approve'} onPress={() => act('approve')} /> : null}
           {m.status === 'active' ? <Button label={mt('registerPayment')} icon="dollar-sign" onPress={() => setPay(true)} /> : null}
+          {isAdmin && m.status === 'active' && m.id !== user?.id && (user?.is_superadmin || !m.roles.some((r) => r === 'owner' || r === 'admin')) ? (
+            <Button label={mt('impView')} variant="secondary" icon="eye" loading={busy === 'imp'} onPress={async () => {
+              setBusy('imp');
+              try { await startImpersonation(m.id); router.replace('/' as never); } catch (e) { setNotice({ tone: 'danger', text: errorMessage(e) }); setBusy(null); }
+            }} />
+          ) : null}
           {m.email && m.id !== user?.id ? <Button label={mt('resendAccess')} variant="secondary" icon="mail" loading={busy === 'access'} onPress={() => act('access')} /> : null}
           {m.status === 'inactive' ? <Button label={mt('reactivate')} variant="secondary" icon="rotate-ccw" loading={busy === 'reactivate'} onPress={() => act('reactivate')} />
             : isAdmin && m.id !== user?.id ? <Button label={mt('deactivate')} variant="danger" icon="user-x" onPress={() => setLeaving(true)} /> : null}

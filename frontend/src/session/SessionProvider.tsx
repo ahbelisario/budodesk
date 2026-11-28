@@ -32,6 +32,10 @@ type Session = {
   switchDojo: (dojoId: number) => Promise<void>;
   setActingUser: (userId: number) => void;
   reload: () => Promise<void>;
+  /** "Ver como" (soporte, solo lectura) */
+  impersonation: AuthPayload['impersonation'] | null;
+  startImpersonation: (userId: number) => Promise<void>;
+  endImpersonation: () => Promise<void>;
 };
 
 const SessionContext = createContext<Session | null>(null);
@@ -43,8 +47,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [dojos, setDojos] = useState<DojoSummary[]>([]);
   const [minors, setMinors] = useState<Minor[]>([]);
   const [actingUserId, setActingUserId] = useState<number | null>(null);
+  const [impersonation, setImpersonation] = useState<AuthPayload['impersonation'] | null>(null);
 
   const apply = useCallback((p: AuthPayload | null) => {
+    // Cualquier payload sin "impersonation" (refresh, cambio de dojo, login) termina la vista
+    setImpersonation(p?.impersonation ?? null);
     if (!p) {
       setUser(null); setDojo(null); setDojos([]); setMinors([]); setActingUserId(null);
       setStatus('signedOut');
@@ -83,12 +90,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return data;
   }, []);
 
+  // "Ver como": el token de la otra persona vive solo en memoria (30 min, sin refresh).
+  // Al salir, o al vencer, se pide un token nuevo con el refresh de quien mira.
+  const startImpersonation = useCallback(async (userId: number) => {
+    const data = await api.post<AuthPayload>('/impersonation', { user_id: userId });
+    setActingUserId(null);
+    await applyAuth(data);
+  }, []);
+  const endImpersonation = useCallback(async () => {
+    try { await api.post('/impersonation/end'); } catch { /* el token pudo vencer */ }
+    tokenStore.setAccess(null);
+    setActingUserId(null);
+    const back = await refreshSession();
+    if (!back) apply(null);
+  }, [apply]);
+
   const logout = useCallback(async () => {
+    if (impersonation) { await endImpersonation(); return; }
     await forgetPushOnLogout(); // antes de perder la sesión
     try { await api.post('/auth/logout'); } catch { /* sin red: igual se cierra localmente */ }
     await tokenStore.clear();
     apply(null);
-  }, [apply]);
+  }, [apply, impersonation, endImpersonation]);
 
   const switchDojo = useCallback(async (dojoId: number) => {
     const data = await api.post<AuthPayload>('/auth/switch-dojo', { dojo_id: dojoId });
@@ -112,8 +135,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       isStaff: hasRole('owner', 'admin', 'staff', 'instructor'),
       login, logout, switchDojo, reload,
       setActingUser: setActingUserId,
+      impersonation, startImpersonation, endImpersonation,
     };
-  }, [status, user, dojo, dojos, minors, actingUserId, login, logout, switchDojo, reload]);
+  }, [status, user, dojo, dojos, minors, actingUserId, login, logout, switchDojo, reload, impersonation, startImpersonation, endImpersonation]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

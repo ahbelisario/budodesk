@@ -36,6 +36,7 @@ function createApp() {
   const { notifications, announcements, registerEventHandlers } = require('./modules/notifications/notifications.routes');
 
   app.use('/api/v2/auth', require('./modules/auth/auth.routes'));
+  app.use('/api/v2/impersonation', require('./modules/auth/impersonation.routes'));
   app.use('/api/v2/account', account);
   app.use('/api/v2/me', me);
   app.use('/api/v2/dojo', dojo);
