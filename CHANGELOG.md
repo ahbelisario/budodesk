@@ -7,6 +7,10 @@ Formato: `MAYOR.MENOR.PARCHE`.
 
 Cada versión se crea con `./release.sh` y queda marcada en git como `vX.Y.Z`.
 
+## [1.0.28] - 2026-11-28
+
+- Mensualidades adelantadas y quién impartió la clase
+
 ## [1.0.27] - 2026-11-28
 
 - Inicio del alumno en celular: quitar el logo duplicado
