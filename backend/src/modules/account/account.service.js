@@ -3,6 +3,7 @@
  * Los tokens se guardan hasheados (sha256) en user_tokens y son de un solo uso.
  */
 const env = require('../../config/env');
+const { assertPassword } = require('../../services/passwordPolicy');
 const { pool, withTransaction, one } = require('../../db/pool');
 const { randomToken, sha256 } = require('../../utils/tokens');
 const { sendMail } = require('../../services/mailer');
@@ -48,10 +49,8 @@ async function mailContext(userId, dojoId) {
 const link = (path, token, slug) =>
   `${env.APP_BASE_URL}${path}?token=${encodeURIComponent(token)}${slug ? `&dojo=${encodeURIComponent(slug)}` : ''}`;
 
-function validatePassword(pw) {
-  if (typeof pw !== 'string' || pw.length < 10) throw badRequest('La contraseña debe tener al menos 10 caracteres');
-  if (pw.length > 200) throw badRequest('La contraseña es demasiado larga');
-}
+// Las reglas (largo, mayúscula, número, símbolo…) se configuran en Plataforma → Seguridad
+const validatePassword = (pw) => assertPassword(pw);
 
 // ---------------------------------------------------------------------------
 
@@ -84,7 +83,7 @@ async function register(b, { ip }) {
     { slug: b.dojo_slug });
   if (!dojo) throw badRequest('Dojo no encontrado');
   if (dojo.self_registration === 'closed') throw forbidden('Este dojo no acepta registros en línea', 'REGISTRATION_CLOSED');
-  validatePassword(b.password);
+  await validatePassword(b.password);
 
   const exists = await one(pool, 'SELECT id FROM users WHERE email = :e', { e: b.email });
   if (exists) throw conflict('Ya existe una cuenta con ese correo. Inicia sesión para unirte a este dojo.', 'EMAIL_TAKEN');
@@ -172,7 +171,7 @@ async function forgotPassword(email) {
 
 /** Restablece (o crea por primera vez) la contraseña con un token. Cierra todas las sesiones. */
 async function resetPassword(token, newPassword) {
-  validatePassword(newPassword);
+  await validatePassword(newPassword);
   const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
   const uid = await withTransaction(async (conn) => {
     const id = await consumeToken(conn, token, 'password_reset');
@@ -193,7 +192,7 @@ async function resetPassword(token, newPassword) {
 
 /** Cambio de contraseña con sesión iniciada. Cierra las demás sesiones. */
 async function changePassword({ userId, sessionId, current, next }) {
-  validatePassword(next);
+  await validatePassword(next);
   const u = await one(pool, 'SELECT password_hash FROM users WHERE id = :u', { u: userId });
   if (!u?.password_hash || !(await bcrypt.compare(current, u.password_hash))) {
     throw new AppError(400, 'WRONG_PASSWORD', 'La contraseña actual no es correcta');

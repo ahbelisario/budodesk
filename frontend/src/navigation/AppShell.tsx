@@ -61,6 +61,32 @@ function SidebarItem({ item, active, onPress, badge }: { item: NavItem; active: 
   );
 }
 
+/** Celular: barra de arriba con el logo y el nombre del dojo (como en la barra lateral de la web) */
+function MobileTopBar() {
+  const { dojo, dojos } = useSession();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const canSwitch = dojos.length > 1 || !!dojo?.support;
+  return (
+    <View style={{ backgroundColor: palette.ink, paddingTop: insets.top, paddingHorizontal: space.lg }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, height: 52 }}>
+        <Pressable accessibilityRole="link" accessibilityLabel={t('nav.home')} onPress={() => router.push('/' as never)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+          <DojoMark size={32} />
+          <Text variant="bodyStrong" color="#FFFFFF" numberOfLines={1} style={{ fontFamily: fonts.display, fontSize: 16, flexShrink: 1 }}>
+            {dojo?.short_name || dojo?.name || 'BudoDesk'}
+          </Text>
+        </Pressable>
+        {canSwitch ? (
+          <Pressable accessibilityRole="button" onPress={() => router.push('/choose-dojo')} hitSlop={8}>
+            <Text variant="caption" color={palette.mutedOnDark}>{t('nav.switchDojo')}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 function Sidebar() {
   const { dojo, dojos, user, roles, logout } = useSession();
   const router = useRouter();
@@ -142,7 +168,7 @@ function TabBar() {
 }
 
 /** Aviso fijo mientras se ve la app como otra persona ("ver como", solo lectura) */
-function ImpersonationBanner() {
+function ImpersonationBanner({ inset = true }: { inset?: boolean }) {
   const { impersonation, endImpersonation } = useSession();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -157,7 +183,7 @@ function ImpersonationBanner() {
   return (
     <View accessibilityRole="alert" style={{
       flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap',
-      backgroundColor: '#5B2A86', paddingHorizontal: space.lg, paddingVertical: space.sm, paddingTop: space.sm + insets.top,
+      backgroundColor: '#5B2A86', paddingHorizontal: space.lg, paddingVertical: space.sm, paddingTop: space.sm + (inset ? insets.top : 0),
     }}>
       <Icon name="eye" size={16} color="#FFFFFF" />
       <Text variant="small" color="#FFFFFF" style={{ flex: 1, minWidth: 180 }}>{t('members.impBanner', { name: impersonation.name, time: until })}</Text>
@@ -170,7 +196,7 @@ function ImpersonationBanner() {
 }
 
 /** Aviso fijo arriba cuando el superadmin está dentro de un dojo en modo soporte */
-function SupportBanner() {
+function SupportBanner({ inset = true }: { inset?: boolean }) {
   const { dojo, dojos, switchDojo } = useSession();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -185,7 +211,7 @@ function SupportBanner() {
   return (
     <View accessibilityRole="alert" style={{
       flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap',
-      backgroundColor: palette.ink, paddingHorizontal: space.lg, paddingVertical: space.sm, paddingTop: space.sm + insets.top,
+      backgroundColor: palette.ink, paddingHorizontal: space.lg, paddingVertical: space.sm, paddingTop: space.sm + (inset ? insets.top : 0),
     }}>
       <Icon name="tool" size={16} color="#F5C451" />
       <Text variant="small" color="#FFFFFF" style={{ flex: 1, minWidth: 180 }}>{t('platform.supportBanner', { dojo: dojo.short_name || dojo.name })}</Text>
@@ -201,7 +227,6 @@ function SupportBanner() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { width } = useWindowDimensions();
-  const { dojo } = useSession();
   const wide = width >= WIDE_BREAKPOINT;
   if (wide) {
     return (
@@ -218,9 +243,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
   return (
     <View style={{ flex: 1, backgroundColor: palette.paper }}>
-      <ImpersonationBanner />
-      <SupportBanner />
-      <TrialBanner topInset={!dojo?.support} />
+      <MobileTopBar />
+      <ImpersonationBanner inset={false} />
+      <SupportBanner inset={false} />
+      <TrialBanner topInset={false} />
       <View style={{ flex: 1 }}>{children}</View>
       <TabBar />
     </View>

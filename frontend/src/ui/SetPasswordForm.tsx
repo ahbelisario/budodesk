@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { usePublicDojo } from '../session/usePublicDojo';
 import { AuthLayout } from './AuthLayout';
 import { Button, Field, Notice, Text } from './primitives';
+import { PasswordRules, passwordOk, usePasswordPolicy } from './PasswordRules';
 import { ThemeProvider } from '../theme/ThemeProvider';
 import { palette, space } from '../theme/tokens';
 import { t } from '../i18n';
@@ -19,10 +20,16 @@ export function SetPasswordForm({ mode }: { mode: 'reset' | 'set' }) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const mismatch = pw2.length > 0 && pw !== pw2;
+  const policy = usePasswordPolicy();
+  const [tried, setTried] = useState(false);
+  const mismatch = (pw2.length > 0 || tried) && pw !== pw2;
 
   async function submit() {
-    if (pw.length < 10 || pw !== pw2 || !params.token) return;
+    // El botón siempre se puede presionar: si falta algo, se marca en rojo qué es
+    setTried(true);
+    if (!passwordOk(pw, policy)) { setError(t('auth.rulesMissing')); return; }
+    if (pw !== pw2) { setError(t('auth.passwordsDontMatch')); return; }
+    if (!params.token) return;
     setBusy(true); setError(null);
     try {
       await api.public.post('/account/password/reset', { token: params.token, password: pw });
@@ -42,10 +49,11 @@ export function SetPasswordForm({ mode }: { mode: 'reset' | 'set' }) {
             <View style={{ gap: space.md }}>
               {error ? <Notice tone="danger">{error}</Notice> : null}
               <Field label={t('auth.newPassword')} value={pw} onChangeText={setPw} secureToggle autoComplete="new-password"
-                textContentType="newPassword" hint={t('auth.passwordHint')} />
+                textContentType="newPassword" />
+              <PasswordRules password={pw} policy={policy} showErrors={tried} />
               <Field label={t('auth.confirmPassword')} value={pw2} onChangeText={setPw2} secureToggle autoComplete="new-password"
                 error={mismatch ? t('auth.passwordsDontMatch') : null} onSubmitEditing={submit} />
-              <Button label={t('common.save')} onPress={submit} loading={busy} disabled={pw.length < 10 || pw !== pw2} fullWidth />
+              <Button label={t('common.save')} onPress={submit} loading={busy} fullWidth />
             </View>
           )}
         <Link href="/login" style={{ alignSelf: 'center' }}>

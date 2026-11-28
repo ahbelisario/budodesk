@@ -26,11 +26,16 @@ const ok = (res, data) => res.json({ status: 'success', ...(data ? { data } : {}
 // ===========================================================================
 const account = express.Router();
 
+// Reglas de contraseña vigentes (para mostrarlas en vivo al crearla)
+account.get('/password-policy', async (_req, res) => {
+  res.json({ status: 'success', data: await require('../../services/passwordPolicy').getPolicy() });
+});
+
 account.post('/register', limiter, validate({
   body: z.object({
     dojo_slug: z.string().trim().min(1).max(60),
     email,
-    password: z.string().min(10).max(200),
+    password: z.string().min(1).max(200),
     first_name: z.string().trim().min(1).max(100),
     last_name: z.string().trim().max(100).optional(),
     date_of_birth: date.optional(),
@@ -58,7 +63,7 @@ account.post('/password/forgot', limiter, validate({ body: z.object({ email }) }
 });
 
 account.post('/password/reset', limiter, validate({
-  body: z.object({ token: z.string().min(20).max(200), password: z.string().min(10).max(200) }),
+  body: z.object({ token: z.string().min(20).max(200), password: z.string().min(1).max(200) }),
 }), async (req, res) => {
   ok(res, await service.resetPassword(req.valid.body.token, req.valid.body.password));
 });
@@ -162,7 +167,7 @@ me.patch('/settings', validate({
 });
 
 me.post('/password', validate({
-  body: z.object({ current_password: z.string().min(1).max(200), new_password: z.string().min(10).max(200) }),
+  body: z.object({ current_password: z.string().min(1).max(200), new_password: z.string().min(1).max(200) }),
 }), async (req, res) => {
   await service.changePassword({
     userId: req.auth.userId, sessionId: req.auth.sessionId,

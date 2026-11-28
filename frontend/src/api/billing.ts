@@ -81,6 +81,7 @@ export const billingApi = {
   charges: (q: { status?: string; user_id?: number; type?: string; from?: string; to?: string; q?: string } & Page) => api.getPage<ChargeRow[]>('/charges', q),
   createCharge: (b: { user_id: number; type: string; description: string; amount: number; due_date?: string }) => api.post<ChargeRow>('/charges', b),
   voidCharge: (id: number, reason: string) => api.post(`/charges/${id}/void`, { reason }),
+  reactivateCharge: (id: number) => api.post<ChargeRow & { credit_applied: number }>(`/charges/${id}/reactivate`),
   myAccount: (userId?: number) => api.get<MyAccount>('/charges/mine', userId ? { user_id: userId } : undefined),
 
   payments: (q: { status?: string; user_id?: number; method?: string; from?: string; to?: string; q?: string } & Page) => api.getPage<PaymentRow[]>('/payments', q),

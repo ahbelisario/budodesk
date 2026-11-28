@@ -21,6 +21,7 @@ import { PersonForm, PhotoPicker, type PersonValue } from './members/PersonForm'
 import { mt } from './members/bits';
 import { DevicePushCard } from '../push/DevicePushCard';
 import { AppVersion } from '../ui/AppVersion';
+import { PasswordRules, passwordOk, usePasswordPolicy } from '../ui/PasswordRules';
 
 type TabKey = 'data' | 'children' | 'account';
 type Msg = { tone: 'success' | 'danger'; text: string } | null;
@@ -111,6 +112,8 @@ function AccountTab() {
   const [pwBusy, setPwBusy] = useState(false);
   const [pwMsg, setPwMsg] = useState<Msg>(null);
   const [pwErr, setPwErr] = useState<string | null>(null);
+  const policy = usePasswordPolicy();
+  const [pwTried, setPwTried] = useState(false);
   const [slug, setSlug] = useState('');
   const [joinBusy, setJoinBusy] = useState(false);
   const [joinMsg, setJoinMsg] = useState<Msg>(null);
@@ -137,11 +140,12 @@ function AccountTab() {
   }
   async function changePassword() {
     setPwMsg(null); setPwErr(null);
-    if (next.length < 10) { setPwErr(t('auth.passwordHint')); return; }
+    setPwTried(true);
+    if (!passwordOk(next, policy)) { setPwErr(t('auth.rulesMissing')); return; }
     setPwBusy(true);
     try {
       await api.post('/me/password', { current_password: current, new_password: next });
-      setCurrent(''); setNext('');
+      setCurrent(''); setNext(''); setPwTried(false);
       setPwMsg({ tone: 'success', text: getLanguage() === 'en' ? 'Password updated. Other devices were signed out.' : 'Contraseña actualizada. Se cerró la sesión en tus otros dispositivos.' });
       sessions.reload();
     } catch (e) {
@@ -193,7 +197,8 @@ function AccountTab() {
         <SectionHeader title={mt('changePassword')} />
         {pwMsg ? <Notice tone={pwMsg.tone}>{pwMsg.text}</Notice> : null}
         <Field label={getLanguage() === 'en' ? 'Current password' : 'Contraseña actual'} value={current} onChangeText={setCurrent} secureToggle autoComplete="current-password" />
-        <Field label={t('auth.newPassword')} value={next} onChangeText={setNext} secureToggle autoComplete="new-password" hint={t('auth.passwordHint')} error={pwErr} />
+        <Field label={t('auth.newPassword')} value={next} onChangeText={setNext} secureToggle autoComplete="new-password" error={pwErr} />
+        <PasswordRules password={next} policy={policy} showErrors={pwTried} />
         <Button label={t('common.save')} variant="dark" loading={pwBusy} disabled={!current || !next} onPress={changePassword} style={{ alignSelf: 'flex-start' }} />
       </Card>
 

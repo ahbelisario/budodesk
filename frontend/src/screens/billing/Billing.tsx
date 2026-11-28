@@ -87,12 +87,19 @@ function ChargesTab({ onChanged, version }: { onChanged: () => void; version: nu
   const { hasRole } = useSession();
   const admin = hasRole('admin');
   const today = todayYmd();
-  const [status, setStatus] = useState<'overdue' | 'open' | 'paid' | 'all'>('overdue');
+  const [status, setStatus] = useState<'overdue' | 'open' | 'paid' | 'void' | 'all'>('overdue');
   const [q, setQ] = useState('');
   const dq = useDebounced(q);
   const data = useApi(() => billingApi.charges({ status, q: dq || undefined, page_size: 100 }), [status, dq, version]);
   const [pay, setPay] = useState<ChargeRow | null>(null);
   const [voiding, setVoiding] = useState<ChargeRow | null>(null);
+  async function reactivate(c: ChargeRow) {
+    try {
+      const r = await billingApi.reactivateCharge(c.id);
+      setMsg({ tone: 'success', text: Number(r.credit_applied) > 0 ? bt('reactivatedCredit', { amount: money(r.credit_applied, c.currency) }) : bt('reactivated') });
+      data.reload(); onChanged();
+    } catch (e) { setMsg({ tone: 'danger', text: errorMessage(e) }); }
+  }
   const [msg, setMsg] = useState<Msg>(null);
   const rows = data.data?.data ?? [];
   const meta = data.data?.meta as { total?: number; balance?: number } | undefined;
@@ -103,7 +110,7 @@ function ChargesTab({ onChanged, version }: { onChanged: () => void; version: nu
       <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap', alignItems: 'center' }}>
         <SearchField value={q} onChange={setQ} placeholder={bt('search')} />
         <FilterChips label={bt('tab_charges')} value={status} onChange={setStatus}
-          options={(['overdue', 'open', 'paid', 'all'] as const).map((k) => ({ key: k, label: bt(`c_${k}`) }))} />
+          options={(['overdue', 'open', 'paid', 'void', 'all'] as const).map((k) => ({ key: k, label: bt(`c_${k}`) }))} />
       </View>
       {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
       {meta && (status === 'overdue' || status === 'open') && rows.length ? (
@@ -112,6 +119,8 @@ function ChargesTab({ onChanged, version }: { onChanged: () => void; version: nu
       <Card padding={0} style={{ overflow: 'hidden' }}>
         {data.loading ? <Loading /> : rows.length === 0 ? <EmptyState icon="check-circle" title={bt('noCharges')} body={bt('noChargesBody')} /> : rows.map((c, i) => {
           const open = c.status === 'pending' || c.status === 'partial';
+          const reactivateBtn = admin && c.status === 'void'
+            ? <Button label={bt('reactivate')} size="sm" variant="secondary" icon="rotate-ccw" onPress={() => reactivate(c)} /> : null;
           return (
             <View key={c.id}>
               {i > 0 ? <Divider /> : null}
@@ -125,12 +134,14 @@ function ChargesTab({ onChanged, version }: { onChanged: () => void; version: nu
                   <View style={{ flex: 1.2, gap: 2 }}>
                     <Text variant="small" color={open && c.due_date < today ? palette.danger : palette.ink2}>{dueLabel(c.due_date, today, open)}</Text>
                     {c.status === 'partial' ? <Text variant="caption" color={palette.ink2}>{bt('paidOf', { paid: money(c.amount_paid, c.currency), total: money(c.total, c.currency) })}</Text> : null}
+                    {c.status === 'void' && c.voided_reason ? <Text variant="caption" color={palette.ink2} numberOfLines={1}>{bt('voidedReason', { reason: c.voided_reason })}</Text> : null}
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, justifyContent: 'flex-end', flex: 1.6 }}>
                     <Text variant="bodyStrong" style={{ minWidth: 84, textAlign: 'right' }}>{money(open ? c.balance : c.total, c.currency)}</Text>
                     <ChargeStatus status={c.status} due={c.due_date} today={today} />
                     {open ? <Button label={bt('collect')} size="sm" onPress={() => setPay(c)} /> : null}
                     {open && admin && Number(c.amount_paid) === 0 ? <Button label={bt('voidCharge')} size="sm" variant="ghost" onPress={() => setVoiding(c)} /> : null}
+                    {reactivateBtn}
                   </View>
                 </View>
               ) : (
@@ -148,6 +159,8 @@ function ChargesTab({ onChanged, version }: { onChanged: () => void; version: nu
                     <Text variant="small" color={open && c.due_date < today ? palette.danger : palette.ink2} style={{ flexShrink: 1 }}>{dueLabel(c.due_date, today, open)}</Text>
                   </View>
                   {c.status === 'partial' ? <Text variant="caption" color={palette.ink2}>{bt('paidOf', { paid: money(c.amount_paid, c.currency), total: money(c.total, c.currency) })}</Text> : null}
+                  {c.status === 'void' && c.voided_reason ? <Text variant="caption" color={palette.ink2}>{bt('voidedReason', { reason: c.voided_reason })}</Text> : null}
+                  {reactivateBtn ? <View style={{ flexDirection: 'row' }}>{reactivateBtn}</View> : null}
                   {open ? (
                     <View style={{ flexDirection: 'row', gap: space.xs, marginTop: 2 }}>
                       <Button label={bt('collect')} size="sm" icon="dollar-sign" onPress={() => setPay(c)} style={{ flexGrow: 1 }} />

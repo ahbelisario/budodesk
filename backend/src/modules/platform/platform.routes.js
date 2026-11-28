@@ -12,6 +12,8 @@
  *   PUT    /rank-templates/:key   editar (datos, programas y grados, activa)
  *   DELETE /rank-templates/:key   borrar (solo las creadas aquí; las precargadas se desactivan)
  *   POST   /rank-templates/:key/restore  volver una precargada a su versión original
+ *   GET    /security/password-policy  reglas de contraseña de toda la plataforma
+ *   PUT    /security/password-policy
  *   GET    /monitoring            ajustes, estado y alertas (?status=open|resolved|all)
  *   PUT    /monitoring/settings   correos de alerta, push, latido, umbral de disco
  *   POST   /monitoring/test       manda una alerta de prueba
@@ -139,6 +141,25 @@ router.put('/plans/:code', validate({
   await audit(require('../../db/pool').pool, {
     userId: req.auth.userId, action: 'update', entity: 'saas_plan', entityId: req.valid.params.code, ip: req.ip, after: req.valid.body });
   res.json({ status: 'success', data: plan });
+});
+
+// ===========================================================================
+// Seguridad: política de contraseñas
+// ===========================================================================
+const pwPolicy = require('../../services/passwordPolicy');
+router.get('/security/password-policy', async (_req, res) => {
+  res.json({ status: 'success', data: await pwPolicy.getPolicy() });
+});
+router.put('/security/password-policy', validate({
+  body: z.object({
+    min_length: z.coerce.number().int().min(8).max(64),
+    require_upper: z.boolean(), require_lower: z.boolean(), require_number: z.boolean(), require_symbol: z.boolean(),
+  }),
+}), async (req, res) => {
+  const before = await pwPolicy.getPolicy();
+  const p = await pwPolicy.setPolicy(req.valid.body, req.auth.userId);
+  await audit(require('../../db/pool').pool, { userId: req.auth.userId, action: 'update', entity: 'password_policy', ip: req.ip, before, after: p });
+  res.json({ status: 'success', data: p });
 });
 
 // ===========================================================================

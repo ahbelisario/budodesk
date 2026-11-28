@@ -142,6 +142,26 @@ charges.post('/:id/void', requireRole('admin'), validate({
   res.json({ status: 'success' });
 });
 
+// Reactivar un cargo anulado por error. Si la persona tiene saldo a favor (pagos sin aplicar), se aplica.
+charges.post('/:id/reactivate', requireRole('admin'), validate({ params: z.object({ id }) }), async (req, res) => {
+  const chargeId = req.valid.params.id;
+  const dojo = await getDojo(req);
+  let applied = 0;
+  await req.tdb.transaction(async (t) => {
+    const c = await t.one('SELECT status, user_id, currency, voided_reason FROM charges WHERE dojo_id = :dojoId AND id = :chargeId FOR UPDATE', { chargeId });
+    if (!c) throw notFound('Cargo no encontrado');
+    if (c.status !== 'void') throw conflict('Solo se reactivan cargos anulados', 'CHARGE_NOT_VOID');
+    await t.query("UPDATE charges SET status = 'pending', voided_reason = NULL WHERE dojo_id = :dojoId AND id = :chargeId", { chargeId });
+    await svc.refreshChargeStatus(t, chargeId);
+    applied = await svc.applyCredit(t, c.user_id, c.currency);
+    if (applied > 0) await svc.reactivatePaidMemberships(t, c.user_id, todayIn(dojo.timezone));
+    await auditReq(req, t.executor, { action: 'reactivate', entity: 'charge', entityId: chargeId,
+      before: { status: c.status, voided_reason: c.voided_reason }, after: { credit_applied: applied } });
+  });
+  const charge = await req.tdb.one(`${CHARGE_SELECT} WHERE c.dojo_id = :dojoId AND c.id = :id`, { id: chargeId });
+  res.json({ status: 'success', data: { ...charge, credit_applied: applied } });
+});
+
 // ===========================================================================
 // Pagos
 // ===========================================================================

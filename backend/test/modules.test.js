@@ -362,6 +362,30 @@ describe('membresías y facturación', () => {
     assert.equal(Number(ok(await api('get', `/charges/mine?user_id=${ids.mama}`, T.admin)).summary.credit), startCredit);
   });
 
+  test('reactivar un cargo anulado: vuelve a pendiente y se le aplica el saldo a favor', async () => {
+    const ch = ok(await api('post', '/charges', T.admin, { user_id: ids.mama, type: 'membership', description: 'Mensualidad nov', amount: 400 }), 201);
+    ok(await api('post', `/charges/${ch.id}/void`, T.admin, { reason: 'baja' }));
+    // regresó y pagó: el pago queda como saldo a favor porque el cargo está anulado
+    const p = ok(await api('post', '/payments', T.admin, { user_id: ids.mama, amount: 400, method: 'cash', reference: 'REGRESO' }), 201);
+    assert.ok(Number(p.unapplied ?? 400) > 0);
+    assert.equal((await api('post', `/charges/${ch.id}/reactivate`, T.student)).status, 403);
+    const r = ok(await api('post', `/charges/${ch.id}/reactivate`, T.admin));
+    assert.equal(r.status, 'paid');
+    assert.equal(Number(r.credit_applied), 400);
+    assert.equal((await api('post', `/charges/${ch.id}/reactivate`, T.admin)).status, 409, 'ya no está anulado');
+    // sin saldo a favor queda pendiente
+    const ch2 = ok(await api('post', '/charges', T.admin, { user_id: ids.mama, type: 'other', description: 'Playera', amount: 150 }), 201);
+    ok(await api('post', `/charges/${ch2.id}/void`, T.admin, { reason: 'error' }));
+    const r2 = ok(await api('post', `/charges/${ch2.id}/reactivate`, T.admin));
+    assert.equal(r2.status, 'pending');
+    assert.equal(r2.voided_reason, null);
+    ok(await api('post', `/charges/${ch2.id}/void`, T.admin, { reason: 'limpieza' }));
+    // Limpieza para el tablero: cancelar el pago y anular el cargo
+    const regreso = (await pool.query("SELECT id FROM payments WHERE reference = 'REGRESO'"))[0][0].id;
+    ok(await api('post', `/payments/${regreso}/cancel`, T.admin, { reason: 'prueba' }));
+    ok(await api('post', `/charges/${ch.id}/void`, T.admin, { reason: 'limpieza' }));
+  });
+
   test('el alumno no puede editar membresías (bug del sistema anterior)', async () => {
     const r = await api('patch', `/memberships/${ids.msAlumno}`, T.student, { price: 1 });
     assert.equal(r.status, 403);
