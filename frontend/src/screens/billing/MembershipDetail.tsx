@@ -7,7 +7,7 @@ import { todayYmd } from '../../api/classes';
 import { useApi } from '../../utils/useApi';
 import { errorMessage } from '../../utils/errors';
 import { Screen } from '../../ui/Screen';
-import { Avatar, Button, Card, Divider, Field, Icon, Loading, Notice, SectionHeader, Text } from '../../ui/primitives';
+import { Avatar, Badge, Button, Card, Divider, Field, Icon, Loading, Notice, SectionHeader, Text } from '../../ui/primitives';
 import { Dialog } from '../../ui/Dialog';
 import { DateField, FormGrid, Select } from '../../ui/forms';
 import { palette, radius, space, fonts } from '../../theme/tokens';
@@ -174,6 +174,16 @@ export function MembershipDetail() {
   const live = !['cancelled', 'expired'].includes(ms.status);
   const done = (m: MS, text: string) => { data.setData(m); setDlg(null); setMsg({ tone: 'success', text }); };
 
+  // Fecha de hoy (local) en YYYY-MM-DD para comparar con las pausas
+  const d0 = new Date();
+  const todayStr = `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')}`;
+  const day = (s: string) => String(s).slice(0, 10);
+  const currentPause = ms.pauses.find((p) => day(p.start_date) <= todayStr && day(p.end_date) >= todayStr);
+  async function endPause(pauseId: number, text: string) {
+    setBusy(true);
+    try { done(await billingApi.endPause(ms.id, pauseId), text); } catch (e) { setMsg({ tone: 'danger', text: errorMessage(e) }); } finally { setBusy(false); }
+  }
+
   async function resume() {
     setBusy(true);
     try { done(await billingApi.resume(ms.id), bt('resumed')); } catch (e) { setMsg({ tone: 'danger', text: errorMessage(e) }); } finally { setBusy(false); }
@@ -200,7 +210,9 @@ export function MembershipDetail() {
           <Button label={t('members.registerPayment')} icon="dollar-sign" onPress={() => setDlg('pay')} />
           <Button label={bt('editPrice')} variant="secondary" size="sm" icon="tag" onPress={() => setDlg('price')} />
           {ms.max_members > 1 ? <Button label={bt('editMembers')} variant="secondary" size="sm" icon="users" onPress={() => setDlg('members')} /> : null}
-          <Button label={bt('pause')} variant="secondary" size="sm" icon="pause-circle" onPress={() => setDlg('pause')} />
+          {currentPause
+            ? <Button label={bt('resumeToday')} variant="secondary" size="sm" icon="play-circle" loading={busy} onPress={() => endPause(currentPause.id, bt('resumedToday'))} />
+            : <Button label={bt('pause')} variant="secondary" size="sm" icon="pause-circle" onPress={() => setDlg('pause')} />}
           {ms.cancel_at_period_end ? <Button label={bt('resume')} variant="secondary" size="sm" icon="rotate-ccw" loading={busy} onPress={resume} />
             : <Button label={bt('cancelMs')} variant="danger" size="sm" icon="x-circle" onPress={() => setDlg('cancel')} />}
         </View>
@@ -233,7 +245,15 @@ export function MembershipDetail() {
           {ms.pauses.length ? (
             <Card>
               <SectionHeader title={bt('pauses')} />
-              {ms.pauses.map((p) => <Text key={p.id} variant="small">{dayShort(p.start_date)} – {dayShort(p.end_date)}{p.reason ? ` · ${p.reason}` : ''}</Text>)}
+              {ms.pauses.map((p) => (
+                <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 32 }}>
+                  <Text variant="small" style={{ flex: 1 }}>{dayShort(p.start_date)} – {dayShort(p.end_date)}{p.reason ? ` · ${p.reason}` : ''}</Text>
+                  {live && day(p.start_date) > todayStr ? (
+                    <Button label={bt('removePause')} variant="ghost" size="sm" disabled={busy} onPress={() => endPause(p.id, bt('pauseRemoved'))} />
+                  ) : currentPause?.id === p.id ? <Badge label={bt('st_paused')} tone="warning" /> : null}
+                </View>
+              ))}
+              {currentPause ? <Text variant="small" color={palette.ink2}>{bt('resumeHint')}</Text> : null}
             </Card>
           ) : null}
         </View>

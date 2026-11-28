@@ -309,6 +309,28 @@ describe('membresías y facturación', () => {
     assert.equal(overlap.status, 409);
   });
 
+  test('reanudar: pausa en curso termina ayer y devuelve los días; una pausa futura se quita completa', async () => {
+    const { addDays } = require('../src/utils/dates');
+    const base = ok(await api('get', `/memberships/${ids.msAlumno}`, T.admin));
+    // quitar la pausa futura del test anterior (10 días)
+    const future = base.pauses.find((p) => String(p.start_date).slice(0, 10) === today(5));
+    const r1 = ok(await api('post', `/memberships/${ids.msAlumno}/pauses/${future.id}/end`, T.admin));
+    assert.equal(r1.next_billing_date, addDays(base.next_billing_date, -10));
+    assert.ok(!r1.pauses.some((p) => p.id === future.id));
+
+    // pausa en curso: del día -3 al +6 (10 días); reanudar hoy devuelve 7 días (hoy..+6)
+    const p2 = ok(await api('post', `/memberships/${ids.msAlumno}/pauses`, T.admin, { start_date: today(-3), end_date: today(6) }), 201);
+    assert.equal(p2.status, 'paused');
+    const cur = p2.pauses.find((p) => String(p.start_date).slice(0, 10) === today(-3));
+    const r2 = ok(await api('post', `/memberships/${ids.msAlumno}/pauses/${cur.id}/end`, T.admin));
+    assert.notEqual(r2.status, 'paused');
+    assert.equal(r2.next_billing_date, addDays(p2.next_billing_date, -7));
+    assert.equal(String(r2.pauses.find((p) => p.id === cur.id).end_date).slice(0, 10), today(-1));
+
+    // ya terminada → 409
+    assert.equal((await api('post', `/memberships/${ids.msAlumno}/pauses/${cur.id}/end`, T.admin)).status, 409);
+  });
+
   test('cancelar al fin de periodo y revertir', async () => {
     const c = ok(await api('post', `/memberships/${ids.msAlumno}/cancel`, T.admin, { reason: 'Se muda' }));
     assert.equal(c.cancel_at_period_end, 1);

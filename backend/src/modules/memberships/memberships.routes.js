@@ -324,6 +324,55 @@ router.post('/:id/pauses', requireRole(...STAFF), validate({
 });
 
 /**
+ * Terminar una pausa antes de tiempo (reanudar hoy) o quitar una pausa futura.
+ * Devuelve los días que no se usaron: el periodo y la próxima facturación se recorren hacia atrás.
+ */
+router.post('/:id/pauses/:pauseId/end', requireRole(...STAFF), validate({
+  params: z.object({ id, pauseId: id }),
+}), async (req, res) => {
+  const { id: msId, pauseId } = req.valid.params;
+  const dojo = await getDojo(req);
+  const today = todayIn(dojo.timezone);
+
+  await req.tdb.transaction(async (t) => {
+    const ms = await t.one('SELECT status FROM memberships WHERE dojo_id = :dojoId AND id = :msId FOR UPDATE', { msId });
+    if (!ms) throw notFound('Membresía no encontrada');
+    const p = await t.one(
+      `SELECT id, DATE_FORMAT(start_date, '%Y-%m-%d') AS s, DATE_FORMAT(end_date, '%Y-%m-%d') AS e
+         FROM membership_pauses WHERE dojo_id = :dojoId AND membership_id = :msId AND id = :pauseId FOR UPDATE`, { msId, pauseId });
+    if (!p) throw notFound('Pausa no encontrada');
+    if (p.e < today) throw conflict('Esa pausa ya terminó', 'PAUSE_ENDED');
+
+    let unused;
+    if (p.s >= today) {
+      // Empieza hoy o en el futuro: se quita completa
+      unused = daysBetween(p.s, p.e) + 1;
+      await t.query('DELETE FROM membership_pauses WHERE dojo_id = :dojoId AND id = :pauseId', { pauseId });
+    } else {
+      // En curso: termina ayer y hoy ya cuenta como activo
+      const newEnd = addDays(today, -1);
+      unused = daysBetween(newEnd, p.e);
+      await t.query('UPDATE membership_pauses SET end_date = :newEnd WHERE dojo_id = :dojoId AND id = :pauseId', { pauseId, newEnd });
+    }
+    const stillPaused = await t.one(
+      `SELECT 1 AS ok FROM membership_pauses WHERE dojo_id = :dojoId AND membership_id = :msId
+        AND start_date <= :today AND end_date >= :today`, { msId, today });
+    await t.query(
+      `UPDATE memberships SET
+          current_period_end = IF(current_period_end IS NULL, NULL, DATE_SUB(current_period_end, INTERVAL :days DAY)),
+          next_billing_date  = IF(next_billing_date IS NULL, NULL, DATE_SUB(next_billing_date, INTERVAL :days DAY)),
+          end_date           = IF(end_date IS NULL, NULL, DATE_SUB(end_date, INTERVAL :days DAY)),
+          status = IF(status = 'paused' AND :still = 0, 'active', status)
+        WHERE dojo_id = :dojoId AND id = :msId`, { msId, days: unused, still: stillPaused ? 1 : 0 });
+    await auditReq(req, t.executor, { action: 'pause_end', entity: 'membership', entityId: msId,
+      before: { start_date: p.s, end_date: p.e }, after: { unused_days: unused, removed: p.s >= today } });
+  });
+  // Si quedó con adeudos vencidos, la facturación lo marca como "pago atrasado"
+  await svc.runBillingForDojo(req.auth.dojoId).catch(() => {});
+  res.json({ status: 'success', data: await loadMembership(req.tdb, msId) });
+});
+
+/**
  * Cancelar. immediate=false → termina al fin del periodo pagado (no se renueva).
  * immediate=true → termina hoy y anula cargos futuros sin pagar.
  */

@@ -74,6 +74,7 @@ export const billingApi = {
   setMembers: (id: number, member_ids: number[]) => api.put<MembershipDetail>(`/memberships/${id}/members`, { member_ids }),
   pause: (id: number, b: { start_date: string; end_date: string; reason?: string }) => api.post<MembershipDetail>(`/memberships/${id}/pauses`, b),
   cancel: (id: number, b: { immediate: boolean; reason?: string }) => api.post<MembershipDetail>(`/memberships/${id}/cancel`, b),
+  endPause: (id: number, pauseId: number) => api.post<MembershipDetail>(`/memberships/${id}/pauses/${pauseId}/end`),
   resume: (id: number) => api.post<MembershipDetail>(`/memberships/${id}/resume`),
   runBilling: () => api.post<Record<string, number | string>>('/memberships/billing/run'),
 
