@@ -7,6 +7,10 @@ Formato: `MAYOR.MENOR.PARCHE`.
 
 Cada versión se crea con `./release.sh` y queda marcada en git como `vX.Y.Z`.
 
+## [1.0.25] - 2026-11-27
+
+- Membresías: reanudar una pausa antes de tiempo y quitar pausas futuras
+
 ## [1.0.24] - 2026-11-27
 
 - Plantillas de grados editables en la plataforma y 9 plantillas nuevas
