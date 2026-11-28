@@ -7,6 +7,11 @@ Formato: `MAYOR.MENOR.PARCHE`.
 
 Cada versión se crea con `./release.sh` y queda marcada en git como `vX.Y.Z`.
 
+## [1.0.26] - 2026-11-28
+
+- Política de contraseñas, requisitos en vivo, reactivar cargos y logo en celular
+- «Ver como» para soporte: ver la app como otro usuario, en solo lectura
+
 ## [1.0.25] - 2026-11-27
 
 - Membresías: reanudar una pausa antes de tiempo y quitar pausas futuras
