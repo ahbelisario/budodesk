@@ -11,7 +11,7 @@ import { onlineApi } from '../api/online';
 import { Screen } from '../ui/Screen';
 import { Dialog } from '../ui/Dialog';
 import { Badge, Belt, Button, Card, Divider, Field, IconButton, Loading, Notice, ProgressBar, SectionHeader, Text } from '../ui/primitives';
-import { DojoMark, useIsWide } from '../navigation/AppShell';
+import { useIsWide } from '../navigation/AppShell';
 import { palette, radius, space, fonts } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 import { t } from '../i18n';
@@ -255,14 +255,12 @@ export function StudentHome() {
     <Screen maxWidth={wide ? 980 : 560} refreshing={upcoming.refreshing} onRefresh={reloadAll}>
       {/* Encabezado */}
       <View style={{ gap: space.md }}>
-        {!wide ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <DojoMark size={36} />
-            <IconButton icon="bell" label={t('nav.notifications')} badge={(unread.data ?? 0) > 0} onPress={() => router.push('/notifications')} />
-          </View>
-        ) : null}
         <ViewAs />
-        <Text variant={wide ? 'display' : 'title'} accessibilityRole="header">{t('home.hello', { name: actingName ?? '' })}</Text>
+        {/* En celular el logo ya está en la barra de arriba; aquí solo la campana de avisos */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <Text variant={wide ? 'display' : 'title'} accessibilityRole="header" style={{ flex: 1 }}>{t('home.hello', { name: actingName ?? '' })}</Text>
+          {!wide ? <IconButton icon="bell" label={t('nav.notifications')} badge={(unread.data ?? 0) > 0} onPress={() => router.push('/notifications')} /> : null}
+        </View>
       </View>
 
       {flash ? <Notice tone={flash.tone}>{flash.text}</Notice> : null}
